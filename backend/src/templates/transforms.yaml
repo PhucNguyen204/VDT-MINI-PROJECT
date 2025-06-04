@@ -1,0 +1,38 @@
+transforms:
+  parse_logs:
+    # placeholder INPUT sẽ thay bằng id source động
+    type: remap
+    inputs: ["DYNAMIC_SRC"]
+    source: |
+      # Thử parse JSON, nếu thành công thì merge, nếu không thì giữ nguyên
+      parsed, err = parse_json(.message)
+      if err == null {
+        . = merge!(., parsed)
+      }
+      # Đảm bảo có timestamp
+      if !exists(.timestamp) {
+        .timestamp = now()
+      }
+  enrich_tag:
+    type: remap
+    inputs: ["parse_logs"]
+    source: |
+      .pipeline = "demo"
+      if !exists(.source_type) {
+        .source_type = "unknown"
+      }
+  reduce_keep:
+    type: remap
+    inputs: ["enrich_tag"]
+    source: |
+      . = {
+        "timestamp": .timestamp,
+        "message": .message,
+        "pipeline": .pipeline,
+        "source_type": .source_type
+      }
+      
+      # Thêm container_name chỉ nếu tồn tại (cho Docker logs)
+      if exists(.container_name) {
+        .container_name = .container_name
+      }

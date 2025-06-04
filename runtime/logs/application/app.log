@@ -1,0 +1,14 @@
+{"timestamp": "2025-06-04T08:30:00Z", "level": "INFO", "message": "Application started", "service": "web-app"}
+{"timestamp": "2025-06-04T08:31:00Z", "level": "ERROR", "message": "Database connection failed", "service": "web-app", "error": "timeout"}
+{"timestamp": "2025-06-04T08:30:00Z", "level": "INFO", "message": "File test message 1", "service": "app-service"}
+2025-06-04 16:27:11 INFO: Application started successfully
+2025-06-04 16:27:27 WARN: High CPU usage detected: 85%
+INFO: Application started successfully at 06/04/2025 16:32:17
+WARN: High memory usage detected - 85%
+đây là phúc đây háhashdhsadh
+
+
+{"timestamp": "2025-06-04T08:31:00Z", "level": "ERROR", "message": "Database connection failed", "service": "web-app", "error": "timeout"}
+{"timestamp": "2025-06-04T08:31:00Z", "level": "ERROR", "message": "Database connection failed", "service": "web-app", "error": "timeout"}
+{"timestamp": "2025-06-04T08:31:00Z", "level": "ERROR", "message": "Database connection failed", "service": "web-app", "error": "timeout"}
+{"timestamp": "2025-06-04T08:31:00Z", "level": "ERROR", "message": "Database connection failed", "service": "web-app", "error": "timeout"}
