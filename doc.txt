@@ -6,3 +6,54 @@ docker run --rm `
 >>   postgres:15 `
 >>   psql -h localhost -U vector -d pipelines -f /migrations/001_init.sql
 
+
+
+docker exec vdt_pg psql -U vector -d pipelines -c "DELETE FROM pipelines;"
+
+Remove-Item "d:\demo_VDT\runtime\configs\vector_*.yaml" -Force
+
+
+$body = @{
+    name = "http-pipeline-1"
+    mode = "push_http" 
+    listen_port = 8080
+} | ConvertTo-Json; Invoke-RestMethod -Uri "http://localhost:3000/api/multi-pipelines" -Method POST -Body $body -ContentType "application/json"
+
+$body = @{
+    name = "http-pipeline-2"
+    mode = "push_http"
+    listen_port = 8081
+} | ConvertTo-Json; Invoke-RestMethod -Uri "http://localhost:3000/api/multi-pipelines" -Method POST -Body $body -ContentType "application/json"
+
+
+$body = @{
+    name = "file-pipeline-1"
+    mode = "file"
+    include = @("/runtime/logs/**/*.log")
+} | ConvertTo-Json; Invoke-RestMethod -Uri "http://localhost:3000/api/multi-pipelines" -Method POST -Body $body -ContentType "application/json"
+
+
+$body = @{
+    name = "file-pipeline-2"
+    mode = "file"
+    include = @("/runtime/logs/app/**/*.log")
+} | ConvertTo-Json; Invoke-RestMethod -Uri "http://localhost:3000/api/multi-pipelines" -Method POST -Body $body -ContentType "application/json"
+
+
+Invoke-RestMethod -Uri "http://localhost:3000/api/multi-pipelines" -Method GET
+
+Invoke-RestMethod -Uri "http://localhost:3000/api/pipeline-management/active" -Method GET
+
+docker ps -a --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+
+
+Invoke-RestMethod -Uri "http://localhost:3000/api/multi-pipelines" -Method GET
+
+Invoke-RestMethod -Uri "http://localhost:3000/api/pipeline-management/stop/a33438ee-c01a-454a-b76c-448c38aae7e9" -Method 
+
+
+docker exec vdt_pg psql -U vector -d pipelines -c "SELECT id, name, active, stopped_at FROM pipelines WHERE id = '2b6f429d-fcfc-47c0-a9b4-8da3b73080b0';"
+
+
+
+Invoke-RestMethod -Uri "http://localhost:3000/api/multi-pipelines/2b6f429d-fcfc-47c0-a9b4-8da3b73080b0" -Method DELETE

@@ -5,7 +5,7 @@ api:
 sources:
   http_in:
     type: http_server
-    address: 0.0.0.0:8090
+    address: 0.0.0.0:8081
 transforms:
   parse_logs:
     type: remap

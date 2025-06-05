@@ -17,6 +17,12 @@ router.get('/test', pipelineManagementController.testPipelineManagement);
 router.post('/stop/:id', pipelineManagementController.stopPipeline);
 
 /**
+ * POST /api/pipeline-management/restart/:id
+ * Restart a stopped pipeline
+ */
+router.post('/restart/:id', pipelineManagementController.restartPipeline);
+
+/**
  * POST /api/pipeline-management/stop-all
  * Stop all active pipelines
  */

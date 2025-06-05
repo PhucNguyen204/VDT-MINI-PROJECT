@@ -243,12 +243,11 @@ export async function createPipeline(spec) {
 
   const containerId = run.stdout.trim();
   console.log('[Multiple Pipeline] Container started:', containerId);
-  
-  // ---- 4.4  Save DB metadata
+    // ---- 4.4  Save DB metadata
   await db.query(
-    `INSERT INTO pipelines(id,name,source_type,sink_type,config_path,container_id)
-     VALUES($1,$2,$3,$4,$5,$6)`,
-    [id, spec.name || `pipeline_${id.slice(0,8)}`, spec.mode, 'aws_s3', yamlPath, containerId]
+    `INSERT INTO pipelines(id,name,source_type,sink_type,config_path,container_id,deleted)
+     VALUES($1,$2,$3,$4,$5,$6,$7)`,
+    [id, spec.name || `pipeline_${id.slice(0,8)}`, spec.mode, 'aws_s3', yamlPath, containerId, false]
   );
   return { id, containerId };
 }
@@ -258,18 +257,18 @@ export async function createPipeline(spec) {
 /*═══════════════════════════════════════════════════════*/
 export async function stopPipeline(id) {
   const { rows } = await db.query(
-    'SELECT container_id FROM pipelines WHERE id=$1 AND active=true',[id]
+    'SELECT container_id FROM pipelines WHERE id=$1 AND active=true AND deleted=false',[id]
   );
-  if (!rows.length) throw new Error('Pipeline not found or already stopped');
+  if (!rows.length) throw new Error('Pipeline not found or already stopped/deleted');
 
   const cid = rows[0].container_id;
   spawnSync('docker',['stop',cid],{stdio:'ignore'});
   spawnSync('docker',['rm','-f',cid],{stdio:'ignore'});
 
   await db.query(
-    'UPDATE pipelines SET active=false, stopped_at=now() WHERE id=$1',[id]
+    'UPDATE pipelines SET active=false, deleted=true, stopped_at=now() WHERE id=$1',[id]
   );
-  return { id, status:'stopped' };
+  return { id, status:'deleted' };
 }
 
 /*═══════════════════════════════════════════════════════*/
@@ -277,7 +276,7 @@ export async function stopPipeline(id) {
 /*═══════════════════════════════════════════════════════*/
 export async function listPipelines() {
   const { rows } = await db.query(
-    'SELECT * FROM pipelines ORDER BY created_at DESC'
+    'SELECT * FROM pipelines WHERE deleted=false ORDER BY created_at DESC'
   );
   return rows;
 }

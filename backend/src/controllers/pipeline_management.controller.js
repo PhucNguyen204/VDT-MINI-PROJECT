@@ -140,3 +140,34 @@ export async function testPipelineManagement(req, res) {
     });
   }
 }
+
+/**
+ * POST /api/pipeline-management/restart/:id
+ * Restart a stopped pipeline
+ */
+export async function restartPipeline(req, res) {
+  try {
+    const { id } = req.params;
+    
+    if (!id) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Pipeline ID is required'
+      });
+    }
+    
+    const result = await pipelineManagementService.restartPipeline(id);
+    
+    res.json({
+      status: 'success',
+      ...result
+    });
+    
+  } catch (error) {
+    console.error('[Pipeline Management Controller] Restart pipeline error:', error);
+    res.status(500).json({
+      status: 'error',
+      message: error.message
+    });
+  }
+}
