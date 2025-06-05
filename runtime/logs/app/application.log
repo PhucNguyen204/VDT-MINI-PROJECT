@@ -1,0 +1,10 @@
+2025-06-05T15:10:01Z INFO Application started successfully
+2025-06-05T15:10:02Z DEBUG Database connection established
+2025-06-05T15:10:03Z INFO User authentication service initialized
+2025-06-05T15:10:04Z WARN Deprecated API endpoint /v1/users accessed
+2025-06-05T15:10:05Z ERROR Failed to connect to external service: timeout after 30s
+2025-06-05T15:10:06Z INFO Request processed: GET /api/health - 200 OK
+2025-06-05T15:10:07Z DEBUG Cache hit for user data: user_12345
+2025-06-05T15:10:08Z WARN High memory usage detected: 85%
+2025-06-05T15:10:09Z INFO Background job completed: data_sync_001
+2025-06-05T15:10:10Z ERROR Database query failed: connection lost

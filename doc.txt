@@ -1,0 +1,8 @@
+
+## run SQL postgres
+docker run --rm `
+>>   --network container:vdt_pg `
+>>   -v "${pwd}\backend\migrations:/migrations:ro" `
+>>   postgres:15 `
+>>   psql -h localhost -U vector -d pipelines -f /migrations/001_init.sql
+

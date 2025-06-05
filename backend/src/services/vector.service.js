@@ -84,7 +84,7 @@ function buildSource(spec) {
         docker_host: spec.docker_host || 'unix:///var/run/docker.sock',
         
         // Container filtering - only supported fields
-        include_containers: spec.name ? [spec.name] : [],
+        include_containers: spec.include_containers || [],
         exclude_containers: spec.exclude_containers || [],
         
         // Partial message handling

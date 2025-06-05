@@ -1,0 +1,6 @@
+2025-06-05T15:15:01Z INFO File pipeline demonstration started
+2025-06-05T15:15:02Z DEBUG Reading log files from /runtime/logs/app/ directory
+2025-06-05T15:15:03Z INFO Processing both application.log and service.log files
+2025-06-05T15:15:04Z WARN File monitoring is active and real-time
+2025-06-05T15:15:05Z ERROR This is a test error message for demonstration
+2025-06-05T15:15:06Z INFO File-based pipeline test completed successfully
