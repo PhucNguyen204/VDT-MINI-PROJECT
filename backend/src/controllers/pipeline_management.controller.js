@@ -66,14 +66,11 @@ export async function stopAllPipelines(req, res) {
  */
 export async function getActivePipelines(req, res) {
   try {
-    const pipelines = await pipelineManagementService.getActivePipelines();
-    
     res.json({
       status: 'success',
-      count: pipelines.length,
-      pipelines
+      message: 'This is a test response',
+      timestamp: new Date().toISOString()
     });
-    
   } catch (error) {
     console.error('[Pipeline Management Controller] Get active pipelines error:', error);
     res.status(500).json({

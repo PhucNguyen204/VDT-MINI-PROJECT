@@ -1,6 +1,0 @@
-{"timestamp": "2025-06-04T08:32:00Z", "level": "WARN", "message": "High memory usage detected", "component": "system-monitor", "memory_percent": 85}
-{"timestamp": "2025-06-04T08:32:00Z", "level": "WARN", "message": "High memory usage detected", "component": "system-monitor", "memory_percent": 85}
-{"timestamp": "2025-06-04T08:30:30Z", "level": "ERROR", "message": "File test message 2", "component": "database"}
-2025-06-04 16:27:21 ERROR: Database connection failed
-ERROR: Database connection timeout - Retry attempt 1
-ERROR: Database connection timeout - Retry attempt 1

@@ -9,5 +9,6 @@ CREATE TABLE IF NOT EXISTS pipelines (
   container_id TEXT,
   created_at   TIMESTAMPTZ DEFAULT now(),
   stopped_at   TIMESTAMPTZ,
-  active       BOOLEAN DEFAULT true
+  active       BOOLEAN DEFAULT true,
+  deleted      BOOLEAN DEFAULT false
 );
