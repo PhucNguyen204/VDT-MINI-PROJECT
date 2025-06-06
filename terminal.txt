@@ -1,0 +1,74 @@
+// xóa container
+docker-compose down
+//buil;
+docker-compose build
+//chạy
+docker-compose up -d --build
+
+
+// tính nang tao pipeline
+/// tạm thời đang để transform mặc định, 
+được chọn source (pull: http. push: file log), sink: (s3 bucket: phucnguyen204 với path config)
+// push_http
+$body = @{
+    name = "http-pipeline-2"
+    mode = "push_http"
+    listen_port = 8085
+} | ConvertTo-Json; Invoke-RestMethod -Uri "http://localhost:3000/api/multi-pipelines" -Method POST -Body $body -ContentType "application/json"
+
+đẩy log: Invoke-RestMethod -Uri "http://localhost:8089" -Method Post -Body "Log test $(Get-Date)" -ContentType "text/plain"
+
+// file
+$body = @{
+    name = "file-pipeline-1"
+    mode = "file"
+    include = @("/runtime/logs/**/*.log")
+} | ConvertTo-Json; Invoke-RestMethod -Uri "http://localhost:3000/api/multi-pipelines" -Method POST -Body $body -ContentType "application/json"
+đẩy log : Add-Content -Path "d:\demo_VDT\runtime\logs\test.log" -Value "Log test $(Get-Date)"
+//docker logInvoke-RestMethod -Uri "http://localhost:3000/api/multi-pipelines" -Method Post -ContentType "application/json" -Body '{"name":"vdt_pg","mode":"docker_logs"}'s
+
+docker exec my_app_container sh -c "echo 'Log test $(date)' 1>&2"
+
+
+// lấy danh sách pipeline
+Invoke-RestMethod -Uri "http://localhost:3000/api/multi-pipelines" -Method Get
+
+// lấy chi tiết
+Invoke-RestMethod -Uri "http://localhost:3000/api/multi-pipelines/<pipeline_id>" -Method Get
+
+// quản lý pipeline
+/// stop 
+Invoke-RestMethod -Uri "http://localhost:3000/api/pipeline-management/stop/<pipeline_id>" -Method Post
+/// restart
+Invoke-RestMethod -Uri "http://localhost:3000/api/pipeline-management/restart/<pipeline_id>" -Method Post
+///stop all
+Invoke-RestMethod -Uri "http://localhost:3000/api/pipeline-management/stop-all" -Method Post
+
+
+// lấy pipeline đang hoạt động 
+Invoke-RestMethod -Uri "http://localhost:3000/api/pipeline-management/active" -Method Get
+
+// trạng thái 
+Invoke-RestMethod -Uri "http://localhost:3000/api/pipeline-management/status/73cad67f-29fe-456c-b732-2d499f75d978" -Method Get
+
+
+// monitoring
+//Thu thập metrics cho một pipeline 
+Invoke-RestMethod -Uri "http://localhost:3000/api/monitoring/collect/<pipeline_id>" -Method Post
+
+2. Thu thập metrics cho tất cả pipeline đang chạy (POST
+Invoke-RestMethod -Uri "http://localhost:3000/api/monitoring/collect-all" -Method Post
+3. Lấy metrics lịch sử của một pipeline (GET /api/monitoring/metrics/:id)
+Invoke-RestMethod -Uri "http://localhost:3000/api/monitoring/metrics/<pipeline_id>?timeRange=1%20hour&types=health,throughput" -Method Get
+4. Bắt đầu tự động thu thập metrics (POST /api/monitoring/scheduler/start)
+RestMethod
+Hoặc để đặt interval (ví dụ 30 giây):
+
+
+Invoke-RestMethod -Uri "http://localhost:3000/api/monitoring/scheduler/start" -Method Post -ContentType "application/json" -Body '{"intervalSeconds":30}'
+5. Dừng tự động thu thập metrics (POST /api/monitoring/scheduler/stop)
+Invoke-RestMethod -Uri "http://localhost:3000/api/monitoring/scheduler/stop" -Method Post
+7. Cập nhật khoảng thời gian thu thập metrics (POST /api/monitoring/scheduler/interval)
+Invoke-RestMethod -Uri "http://localhost:3000/api/monitoring/scheduler/interval" -Method Post -ContentType "application/json" -Body '{"intervalSeconds":60}'
+8. Lấy dashboard metrics cho một pipeline (GET /api/monitoring/dashboard/:id)
+Invoke-RestMethod -Uri "http://localhost:3000/api/monitoring/dashboard/<pipeline_id>" -Method Get

@@ -214,8 +214,7 @@ export async function createPipeline(spec) {
   
   // ---- 4.2  Write YAML file
   writeVectorYaml(spec, srcId, yamlPath);
-  
-  // ---- 4.3  Run container
+    // ---- 4.3  Run container
   console.log('[Multiple Pipeline] Starting container with runtime mount from host');
   const dockerArgs = [
     'run', '-d',
@@ -226,10 +225,23 @@ export async function createPipeline(spec) {
     '-e', `AWS_DEFAULT_REGION=${process.env.AWS_DEFAULT_REGION}`,
     '--volumes-from', 'demo_vdt_api',
     // Mount Docker socket for docker_logs source
-    '-v', '/var/run/docker.sock:/var/run/docker.sock:ro',
+    '-v', '/var/run/docker.sock:/var/run/docker.sock:ro'
+  ];
+
+  // Add port mapping for HTTP and Syslog pipelines
+  if (spec.mode === 'push_http') {
+    const listenPort = spec.listen_port || 8088;
+    dockerArgs.push('-p', `${listenPort}:${listenPort}`);
+    console.log(`[Multiple Pipeline] Exposing HTTP port: ${listenPort}`);
+  } else if (spec.mode === 'push_syslog') {
+    dockerArgs.push('-p', '5514:5514');
+    console.log('[Multiple Pipeline] Exposing Syslog port: 5514');
+  }
+
+  dockerArgs.push(
     'timberio/vector:0.47.0-debian',
     '-c', yamlPath, '--watch-config'
-  ];
+  );
 
   const run = spawnSync('docker', dockerArgs, { encoding: 'utf8' });
 

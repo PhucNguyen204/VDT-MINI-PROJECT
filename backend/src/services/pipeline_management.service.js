@@ -307,8 +307,7 @@ export async function restartPipeline(pipelineId) {
         console.log(`[Pipeline Management] Starting existing container: ${containerName}`);
         await execAsync(`docker start ${containerName}`);
         containerId = existingContainerId;
-        console.log(`[Pipeline Management] Container started: ${containerId}`);
-      } else {
+        console.log(`[Pipeline Management] Container started: ${containerId}`);      } else {
         // Container doesn't exist, create new one
         console.log(`[Pipeline Management] Creating new container: ${containerName}`);
         const dockerArgs = [
@@ -319,10 +318,32 @@ export async function restartPipeline(pipelineId) {
           '-e', `AWS_SECRET_ACCESS_KEY=${process.env.AWS_SECRET_ACCESS_KEY}`,
           '-e', `AWS_DEFAULT_REGION=${process.env.AWS_DEFAULT_REGION}`,
           '--volumes-from', 'demo_vdt_api',
-          '-v', '/var/run/docker.sock:/var/run/docker.sock:ro',
+          '-v', '/var/run/docker.sock:/var/run/docker.sock:ro'
+        ];
+
+        // Add port mapping based on pipeline source type
+        if (pipeline.source_type === 'push_http') {
+          // Check config file to determine the port
+          try {
+            const configContent = fs.readFileSync(configPath, 'utf8');
+            const portMatch = configContent.match(/address:\s*0\.0\.0\.0:(\d+)/);
+            if (portMatch) {
+              const port = portMatch[1];
+              dockerArgs.push('-p', `${port}:${port}`);
+              console.log(`[Pipeline Management] Exposing HTTP port: ${port}`);
+            }
+          } catch (err) {
+            console.warn(`[Pipeline Management] Could not read config for port mapping: ${err.message}`);
+          }
+        } else if (pipeline.source_type === 'push_syslog') {
+          dockerArgs.push('-p', '5514:5514');
+          console.log('[Pipeline Management] Exposing Syslog port: 5514');
+        }
+
+        dockerArgs.push(
           'timberio/vector:0.47.0-debian',
           '-c', configPath, '--watch-config'
-        ];
+        );
 
         const { stdout, stderr } = await execAsync(`docker ${dockerArgs.join(' ')}`);
         containerId = stdout.trim();

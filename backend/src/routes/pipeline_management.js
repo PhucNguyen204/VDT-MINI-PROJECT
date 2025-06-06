@@ -32,8 +32,6 @@ router.post('/stop-all', pipelineManagementController.stopAllPipelines);
  * GET /api/pipeline-management/active
  * Get all active pipelines
  */
-router.get('/active', pipelineManagementController.getActivePipelines);
-
 /**
  * GET /api/pipeline-management/status/:id
  * Get pipeline status and detailed info
