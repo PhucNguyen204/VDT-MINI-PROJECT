@@ -1,6 +1,6 @@
 // monitoring.controller.js
-import { monitoringService } from '../services/monitoring.service.js';
-import { monitoringScheduler } from '../services/monitoring.scheduler.js';
+import { monitoringService } from './monitoring.service.new.js';
+import { monitoringScheduler } from './monitoring.scheduler.new.js';
 
 /**
  * POST /api/monitoring/collect/:id

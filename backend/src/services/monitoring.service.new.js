@@ -1,4 +1,4 @@
-// monitoring.service.advanced.js
+// monitoring.service.js
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import fetch from 'node-fetch';
@@ -7,9 +7,9 @@ import { db } from '../configs/db.js';
 const execAsync = promisify(exec);
 
 /**
- * Advanced Vector metrics collector with full metrics support
+ * Vector metrics collector with full metrics support
  */
-class AdvancedVectorMetricsCollector {
+class VectorMetricsCollector {
   constructor() {
     this.basePort = 8686;
   }
@@ -220,23 +220,23 @@ class AdvancedVectorMetricsCollector {
 }
 
 /**
- * Advanced monitoring service with comprehensive metrics
+ * Monitoring service with comprehensive metrics
  */
-export class AdvancedMonitoringService {
+export class MonitoringService {
   constructor() {
-    this.collector = new AdvancedVectorMetricsCollector();
+    this.collector = new VectorMetricsCollector();
     this.previousMetrics = new Map(); // Store previous metrics for rate calculation
   }
-
+  
   /**
    * Collect comprehensive metrics for a pipeline
    */
-  async collectAdvancedMetrics(pipelineId) {
+  async collectPipelineMetrics(pipelineId) {
     const client = await db.connect();
     const collectTimestamp = new Date();
     
     try {
-      console.log(`🔍 Collecting advanced metrics for pipeline: ${pipelineId}`);
+      console.log(`🔍 Collecting metrics for pipeline: ${pipelineId}`);
       
       // 1. Get health status
       const healthData = await this.collector.getHealthStatus(pipelineId);
@@ -344,12 +344,281 @@ export class AdvancedMonitoringService {
       };
       
     } catch (error) {
-      console.error('Error in collectAdvancedMetrics:', error);
+      console.error('Error in collectPipelineMetrics:', error);
       return {
         success: false,
         pipeline_id: pipelineId,
         error: error.message,
         timestamp: collectTimestamp
+      };
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Collect metrics for all active pipelines
+   */
+  async collectAllPipelineMetrics() {
+    try {
+      const client = await db.connect();
+      
+      try {
+        const result = await client.query(
+          'SELECT id, name FROM pipelines WHERE deleted = false AND active = true'
+        );
+        
+        const pipelines = result.rows;
+        console.log(`🔄 Found ${pipelines.length} active pipelines to monitor`);
+        
+        if (pipelines.length === 0) {
+          return {
+            success: true,
+            pipelines_count: 0,
+            message: 'No active pipelines found',
+            metrics_collected: 0
+          };
+        }
+        
+        let totalMetricsCollected = 0;
+        const results = [];
+        
+        // Collect metrics for each pipeline
+        for (const pipeline of pipelines) {
+          try {
+            console.log(`📊 Collecting metrics for pipeline: ${pipeline.name} (${pipeline.id})`);
+            
+            const result = await this.collectPipelineMetrics(pipeline.id);
+            results.push({
+              pipeline_id: pipeline.id,
+              pipeline_name: pipeline.name,
+              success: result.success,
+              metrics_collected: result.metrics_collected
+            });
+            
+            if (result.success) {
+              totalMetricsCollected += result.metrics_collected;
+            }
+            
+          } catch (error) {
+            console.error(`Error collecting metrics for ${pipeline.name}:`, error);
+            results.push({
+              pipeline_id: pipeline.id,
+              pipeline_name: pipeline.name,
+              success: false,
+              error: error.message
+            });
+          }
+        }
+        
+        return {
+          success: true,
+          pipelines_count: pipelines.length,
+          metrics_collected: totalMetricsCollected,
+          results: results
+        };
+        
+      } finally {
+        client.release();
+      }
+      
+    } catch (error) {
+      console.error('Error in collectAllPipelineMetrics:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  /**
+   * Get pipeline metrics history
+   */
+  async getPipelineMetrics(pipelineId, timeRange = '1 hour', metricTypes = null) {
+    const client = await db.connect();
+    
+    try {
+      const timeCondition = this.getTimeCondition(timeRange);
+      
+      let query = `
+        SELECT 
+          metric_type,
+          metric_name,
+          metric_value,
+          unit,
+          collected_at
+        FROM pipeline_metrics 
+        WHERE pipeline_id = $1 
+          AND collected_at >= NOW() - INTERVAL '${timeCondition}'
+      `;
+      
+      const params = [pipelineId];
+      
+      if (metricTypes && metricTypes.length > 0) {
+        query += ` AND metric_type = ANY($2)`;
+        params.push(metricTypes);
+      }
+      
+      query += ` ORDER BY collected_at DESC`;
+      
+      const result = await client.query(query, params);
+      
+      // Group metrics by type
+      const groupedMetrics = {};
+      result.rows.forEach(row => {
+        if (!groupedMetrics[row.metric_type]) {
+          groupedMetrics[row.metric_type] = [];
+        }
+        groupedMetrics[row.metric_type].push(row);
+      });
+      
+      // Calculate summaries
+      const summary = {};
+      Object.keys(groupedMetrics).forEach(type => {
+        const typeMetrics = groupedMetrics[type];
+        summary[type] = {
+          count: typeMetrics.length,
+          latest: typeMetrics[0],
+          metrics: typeMetrics.reduce((acc, metric) => {
+            if (!acc[metric.metric_name]) acc[metric.metric_name] = [];
+            acc[metric.metric_name].push({
+              value: metric.metric_value,
+              unit: metric.unit,
+              timestamp: metric.collected_at
+            });
+            return acc;
+          }, {})
+        };
+      });
+      
+      return {
+        success: true,
+        pipeline_id: pipelineId,
+        time_range: timeRange,
+        total_metrics: result.rows.length,
+        metrics_by_type: groupedMetrics,
+        summary: summary,
+        latest_collection: result.rows[0]?.collected_at
+      };
+      
+    } catch (error) {
+      console.error('Error getting pipeline metrics:', error);
+      return {
+        success: false,
+        pipeline_id: pipelineId,
+        error: error.message
+      };
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Get metrics dashboard for a pipeline
+   */
+  async getMetricsDashboard(pipelineId) {
+    const client = await db.connect();
+    
+    try {
+      // Get pipeline details
+      const pipelineResult = await client.query(
+        'SELECT * FROM pipelines WHERE id = $1', 
+        [pipelineId]
+      );
+      
+      if (pipelineResult.rows.length === 0) {
+        return {
+          success: false,
+          message: 'Pipeline not found'
+        };
+      }
+      
+      const pipeline = pipelineResult.rows[0];
+      
+      // Get latest metrics
+      const latestMetricsResult = await client.query(
+        `SELECT 
+          metric_type, 
+          metric_name, 
+          metric_value, 
+          unit, 
+          collected_at
+        FROM pipeline_metrics
+        WHERE pipeline_id = $1
+        AND collected_at > NOW() - INTERVAL '15 minutes'
+        ORDER BY collected_at DESC`,
+        [pipelineId]
+      );
+      
+      // Get throughput metrics over time
+      const throughputResult = await client.query(
+        `SELECT 
+          metric_name, 
+          metric_value, 
+          collected_at
+        FROM pipeline_metrics
+        WHERE pipeline_id = $1
+        AND metric_type = 'throughput'
+        AND collected_at > NOW() - INTERVAL '1 hour'
+        ORDER BY collected_at ASC`,
+        [pipelineId]
+      );
+      
+      // Get health metrics over time
+      const healthResult = await client.query(
+        `SELECT 
+          metric_name, 
+          metric_value, 
+          collected_at
+        FROM pipeline_metrics
+        WHERE pipeline_id = $1
+        AND metric_type = 'health'
+        AND collected_at > NOW() - INTERVAL '1 hour'
+        ORDER BY collected_at ASC`,
+        [pipelineId]
+      );
+      
+      // Process metrics for easier visualization
+      const throughputSeries = {};
+      throughputResult.rows.forEach(row => {
+        if (!throughputSeries[row.metric_name]) {
+          throughputSeries[row.metric_name] = [];
+        }
+        throughputSeries[row.metric_name].push({
+          value: row.metric_value,
+          timestamp: row.collected_at
+        });
+      });
+      
+      const healthSeries = healthResult.rows.map(row => ({
+        status: row.metric_value > 0 ? 'healthy' : 'unhealthy',
+        timestamp: row.collected_at
+      }));
+      
+      // Group latest metrics by type
+      const latestMetricsByType = {};
+      latestMetricsResult.rows.forEach(row => {
+        if (!latestMetricsByType[row.metric_type]) {
+          latestMetricsByType[row.metric_type] = [];
+        }
+        latestMetricsByType[row.metric_type].push(row);
+      });
+      
+      return {
+        success: true,
+        pipeline: pipeline,
+        latest_metrics: latestMetricsByType,
+        throughput_series: throughputSeries,
+        health_series: healthSeries,
+        latest_collection: latestMetricsResult.rows[0]?.collected_at,
+        metrics_count: latestMetricsResult.rows.length
+      };
+      
+    } catch (error) {
+      console.error('Error getting metrics dashboard:', error);
+      return {
+        success: false,
+        error: error.message
       };
     } finally {
       client.release();
@@ -594,80 +863,6 @@ export class AdvancedMonitoringService {
   }
 
   /**
-   * Get comprehensive metrics history
-   */
-  async getAdvancedMetricsHistory(pipelineId, timeRange = '1 hour') {
-    const client = await db.connect();
-    
-    try {
-      const timeCondition = this.getTimeCondition(timeRange);
-      
-      const query = `
-        SELECT 
-          metric_type,
-          metric_name,
-          metric_value,
-          unit,
-          collected_at
-        FROM pipeline_metrics 
-        WHERE pipeline_id = $1 
-          AND collected_at >= NOW() - INTERVAL '${timeCondition}'
-        ORDER BY collected_at DESC
-      `;
-      
-      const result = await client.query(query, [pipelineId]);
-      
-      // Group metrics by type
-      const groupedMetrics = {};
-      result.rows.forEach(row => {
-        if (!groupedMetrics[row.metric_type]) {
-          groupedMetrics[row.metric_type] = [];
-        }
-        groupedMetrics[row.metric_type].push(row);
-      });
-      
-      // Calculate summaries
-      const summary = {};
-      Object.keys(groupedMetrics).forEach(type => {
-        const typeMetrics = groupedMetrics[type];
-        summary[type] = {
-          count: typeMetrics.length,
-          latest: typeMetrics[0],
-          metrics: typeMetrics.reduce((acc, metric) => {
-            if (!acc[metric.metric_name]) acc[metric.metric_name] = [];
-            acc[metric.metric_name].push({
-              value: metric.metric_value,
-              unit: metric.unit,
-              timestamp: metric.collected_at
-            });
-            return acc;
-          }, {})
-        };
-      });
-      
-      return {
-        success: true,
-        pipeline_id: pipelineId,
-        time_range: timeRange,
-        total_metrics: result.rows.length,
-        metrics_by_type: groupedMetrics,
-        summary: summary,
-        latest_collection: result.rows[0]?.collected_at
-      };
-      
-    } catch (error) {
-      console.error('Error getting advanced metrics history:', error);
-      return {
-        success: false,
-        pipeline_id: pipelineId,
-        error: error.message
-      };
-    } finally {
-      client.release();
-    }
-  }
-
-  /**
    * Helper: Convert time range to SQL interval
    */
   getTimeCondition(timeRange) {
@@ -683,4 +878,5 @@ export class AdvancedMonitoringService {
   }
 }
 
-export default AdvancedMonitoringService;
+// Export singleton instance
+export const monitoringService = new MonitoringService();

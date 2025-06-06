@@ -9,7 +9,7 @@ import {
   getMonitoringSchedulerStatus,
   updateMonitoringInterval,
   getMetricsDashboard
-} from '../controllers/monitoring.controller.js';
+} from '../controllers/monitoring.controller.new.js';
 
 const router = express.Router();
 
