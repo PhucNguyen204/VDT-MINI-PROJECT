@@ -1,0 +1,18 @@
+# Transform Template: Enrich Metadata
+# Chức năng: Thêm pipeline metadata và source type
+enrich_transform:
+  type: remap
+  inputs: ["DYNAMIC_INPUT"]
+  source: |
+    .pipeline = "DYNAMIC_PIPELINE_NAME"
+    if !exists(.source_type) {
+      .source_type = "DYNAMIC_SOURCE_TYPE"
+    }
+    # Thêm cluster info nếu có
+    if !is_empty("${CLUSTER_ID-}") {
+      .cluster_id = "${CLUSTER_ID-}"
+    }
+    # Thêm environment info
+    if !is_empty("${ENVIRONMENT-}") {
+      .environment = "${ENVIRONMENT-}"
+    }

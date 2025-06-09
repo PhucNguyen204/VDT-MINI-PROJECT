@@ -19,11 +19,14 @@ $body = @{
     listen_port = 8080
 } | ConvertTo-Json; Invoke-RestMethod -Uri "http://localhost:3000/api/multi-pipelines" -Method POST -Body $body -ContentType "application/json"
 
-$body = @{
-    name = "http-pipeline-2"
-    mode = "push_http"
-    listen_port = 8081
-} | ConvertTo-Json; Invoke-RestMethod -Uri "http://localhost:3000/api/multi-pipelines" -Method POST -Body $body -ContentType "application/json"
+
+
+
+
+
+
+
+
 
 
 $body = @{
@@ -56,4 +59,77 @@ docker exec vdt_pg psql -U vector -d pipelines -c "SELECT id, name, active, stop
 
 
 
-Invoke-RestMethod -Uri "http://localhost:3000/api/multi-pipelines/2b6f429d-fcfc-47c0-a9b4-8da3b73080b0" -Method DELETE
+Invoke-RestMethod -Uri "http://localhost:3000/api/multi-pipelines/2b6f429d-fcfc-47c0-a9b4-8da3b73080b0" -Method 
+
+
+
+
+
+
+
+
+
+
+
+$body = @{
+    name = "dual-source-pipeline"
+    sources = @{
+        file_source = @{
+            type = "file"
+            include = @("D:/demo_VDT/runtime/logs/*.log")
+        }
+        http_source = @{
+            type = "http"
+            listen_port = 8090
+        }
+    }
+    transforms = @{
+        file_source = @("parse", "enrich")
+        http_source = @("parse", "enrich")
+    }
+    sinks = @{
+        file_source = @(
+            @{
+                type = "s3"
+                config = @{
+                    bucket = "phucnguyen204file"
+                    region = "ap-southeast-2"
+                    access_key_id = "AKIA5YG3CCI7MXG5KIE7"
+                    secret_access_key = "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"
+                }
+            },
+            @{
+                type = "s3"
+                config = @{
+                    bucket = "phucnguyen204"
+                    region = "ap-southeast-2"
+                    access_key_id = "AKIA5YG3CCI7MXG5KIE7"
+                    secret_access_key = "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"
+                }
+            }
+        )
+        http_source = @(
+            @{
+                type = "s3"
+                config = @{
+                    bucket = "phucnguyen204"
+                    region = "ap-southeast-2"
+                    access_key_id = "AKIA5YG3CCI7MXG5KIE7"
+                    secret_access_key = "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"
+                }
+            },
+            @{
+                type = "s3"
+                config = @{
+                    bucket = "phucnguyenhttp"
+                    region = "ap-southeast-2"
+                    access_key_id = "AKIA5YG3CCI7MXG5KIE7"
+                    secret_access_key = "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"
+                }
+            }
+        )
+    }
+}
+
+$jsonBody = $body | ConvertTo-Json -Depth 10
+Invoke-RestMethod -Uri "http://localhost:3000/api/custom-pipelines" -Method POST -Body $jsonBody -ContentType "application/json"

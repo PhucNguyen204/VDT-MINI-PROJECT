@@ -20,9 +20,9 @@ docker-compose up -d --build
 ### a. Pipeline HTTP (push_http)
 ```powershell
 $body = @{
-    name = "http-pipeline-2"
+    name = "ytyty"
     mode = "push_http"
-    listen_port = 8085
+    listen_port = 8087
 } | ConvertTo-Json
 Invoke-RestMethod -Uri "http://localhost:3000/api/multi-pipelines" -Method POST -Body $body -ContentType "application/json"
 ```
@@ -172,7 +172,6 @@ docker exec vdt_pg psql -U vector -d pipelines -c "SELECT * FROM pipelines WHERE
 - Thay `<pipeline_id>` bằng ID thực tế của pipeline bạn muốn kiểm tra.
 - Có thể copy từng lệnh vào PowerShell để thao tác nhanh.
 - Nếu cần kiểm tra bảng khác, chỉ cần thay đổi câu SQL trong lệnh `docker exec`.
+docker exec vdt_pg psql -U vector -d pipelines -c "TRUNCATE TABLE pipelines RESTART IDENTITY CASCADE; TRUNCATE TABLE pipeline_metrics RESTART IDENTITY CASCADE; TRUNCATE TABLE pipeline_alerts RESTART IDENTITY CASCADE; TRUNCATE TABLE monitoring_config RESTART IDENTITY CASCADE; TRUNCATE TABLE custom_pipelines RESTART IDENTITY CASCADE"
 
 
-
-docker exec vdt_pg psql -U vector -d pipelines -c "TRUNCATE TABLE pipelines RESTART IDENTITY CASCADE; TRUNCATE TABLE pipeline_metrics RESTART IDENTITY CASCADE; TRUNCATE TABLE pipeline_alerts RESTART IDENTITY CASCADE; TRUNCATE TABLE monitoring_config RESTART IDENTITY CASCADE;"

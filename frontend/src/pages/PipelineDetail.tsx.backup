@@ -1,0 +1,375 @@
+import React, { useEffect, useState } from 'react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import { 
+  ArrowLeft, 
+  Play, 
+  Pause, 
+  Settings, 
+  BarChart3, 
+  FileText, 
+  Edit,
+  Trash2,
+  RefreshCw
+} from 'lucide-react';
+import { usePipelineStore } from '../store';
+import { Card, Badge, Tabs, TabsContent, TabsList, TabsTrigger, Modal } from '../components/ui/UIElements';
+import { Button } from '../components/ui/FormElements';
+import { formatDate } from '../utils';
+
+export const PipelineDetail: React.FC = () => {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();  const { 
+    pipelines, 
+    currentPipeline,
+    loading, 
+    loadPipeline,
+    loadPipelines, 
+    deletePipeline, 
+    stopPipeline,
+    restartPipeline 
+  } = usePipelineStore();
+
+  const [deleteModal, setDeleteModal] = useState(false);
+  const [activeTab, setActiveTab] = useState('overview');
+
+  // Use currentPipeline for detail view, fallback to list pipeline
+  const pipeline = currentPipeline || pipelines.find(p => p.id === id);
+  
+  useEffect(() => {
+    if (id && (!currentPipeline || currentPipeline.id !== id)) {
+      loadPipeline(id);
+    }
+  }, [id, currentPipeline, loadPipeline]);
+
+  const handleTogglePipeline = async () => {
+    if (!pipeline) return;
+    
+    try {
+      if (pipeline.status === 'running') {
+        await stopPipeline(pipeline.id);
+      } else {
+        await restartPipeline(pipeline.id);
+      }
+    } catch (error) {
+      console.error('Failed to toggle pipeline:', error);
+    }
+  };
+
+  const handleDeletePipeline = async () => {
+    if (!pipeline) return;
+    
+    try {
+      await deletePipeline(pipeline.id);
+      navigate('/pipelines');
+    } catch (error) {
+      console.error('Failed to delete pipeline:', error);
+    }
+  };
+
+  const getStatusBadgeVariant = (status: string) => {
+    switch (status) {
+      case 'running':
+        return 'success' as const;
+      case 'stopped':
+        return 'secondary' as const;
+      case 'error':
+        return 'error' as const;
+      default:
+        return 'warning' as const;
+    }
+  };
+
+  // Helper functions to format configuration display
+  const getSourceInfo = (sourcesConfig: any) => {
+    if (!sourcesConfig || Object.keys(sourcesConfig).length === 0) {
+      return { type: 'Not configured', details: 'No source configured' };
+    }
+    
+    const firstSourceKey = Object.keys(sourcesConfig)[0];
+    const firstSource = sourcesConfig[firstSourceKey];
+    
+    let details = '';
+    switch (firstSource.type) {
+      case 'file':
+        details = `Files: ${firstSource.include?.join(', ') || 'No patterns specified'}`;
+        break;
+      case 'http':
+        details = `Port: ${firstSource.listen_port || 'Not specified'}`;
+        break;
+      case 'prometheus_scrape':
+        details = `Endpoints: ${firstSource.endpoints?.join(', ') || 'No endpoints'}`;
+        break;
+      default:
+        details = 'Custom configuration';
+    }
+    
+    return {
+      type: firstSource.type,
+      details: details
+    };
+  };
+  const getTransformInfo = (transformsConfig: any) => {
+    if (!transformsConfig || Object.keys(transformsConfig).length === 0) {
+      return 'No transforms';
+    }
+    
+    const allTransforms = Object.values(transformsConfig).flat() as string[];
+    const uniqueTransforms = Array.from(new Set(allTransforms));
+    
+    return uniqueTransforms.join(' → ');
+  };
+
+  const getSinkInfo = (sinksConfig: any) => {
+    if (!sinksConfig || Object.keys(sinksConfig).length === 0) {
+      return { types: 'Not configured', details: 'No sink configured' };
+    }
+    
+    const allSinks = Object.values(sinksConfig).flat() as string[];
+    const uniqueSinks = Array.from(new Set(allSinks));
+    
+    return {
+      types: uniqueSinks.join(', '),
+      details: `Output to: ${uniqueSinks.map(sink => {
+        switch (sink) {
+          case 's3': return 'AWS S3';
+          case 'console': return 'Console';
+          case 'cloudwatch': return 'CloudWatch';
+          case 'elasticsearch': return 'Elasticsearch';
+          default: return sink;
+        }
+      }).join(', ')}`
+    };
+  };
+
+  if (loading && !pipeline) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <RefreshCw className="h-8 w-8 animate-spin text-gray-400" />
+      </div>
+    );
+  }
+
+  if (!pipeline) {
+    return (
+      <div className="text-center py-12">
+        <h2 className="text-2xl font-bold text-gray-900 mb-4">Pipeline not found</h2>
+        <Link to="/pipelines">
+          <Button>Back to Pipelines</Button>
+        </Link>
+      </div>
+    );
+  }
+
+  const sourceInfo = getSourceInfo(pipeline.sources_config);
+  const transformInfo = getTransformInfo(pipeline.transforms_config);
+  const sinkInfo = getSinkInfo(pipeline.sinks_config);
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-4">
+          <Button
+            variant="secondary"
+            onClick={() => navigate('/pipelines')}
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back
+          </Button>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">{pipeline.name}</h1>
+            <p className="text-gray-600">{pipeline.description || 'No description'}</p>
+          </div>
+        </div>
+        <div className="flex items-center space-x-3">
+          <Badge variant={getStatusBadgeVariant(pipeline.status)}>
+            {pipeline.status}
+          </Badge>
+          <Button
+            variant="secondary"
+            onClick={handleTogglePipeline}
+          >
+            {pipeline.status === 'running' ? (
+              <>
+                <Pause className="h-4 w-4 mr-2" />
+                Stop
+              </>
+            ) : (
+              <>
+                <Play className="h-4 w-4 mr-2" />
+                Start
+              </>
+            )}
+          </Button>
+          <Button variant="secondary">
+            <Edit className="h-4 w-4 mr-2" />
+            Edit
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => setDeleteModal(true)}
+          >
+            <Trash2 className="h-4 w-4 mr-2" />
+            Delete
+          </Button>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="configuration">Configuration</TabsTrigger>
+          <TabsTrigger value="metrics">Metrics</TabsTrigger>
+          <TabsTrigger value="logs">Logs</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview" className="space-y-6">          {/* Pipeline Info */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <Card className="p-6">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Pipeline Status</h3>
+              <div className="space-y-3">
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-500">Status</span>
+                  <Badge variant={getStatusBadgeVariant(pipeline.status)}>
+                    {pipeline.status}
+                  </Badge>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-500">Created</span>
+                  <span className="text-sm text-gray-900">{formatDate(pipeline.created_at)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-500">Updated</span>
+                  <span className="text-sm text-gray-900">{formatDate(pipeline.updated_at)}</span>
+                </div>
+              </div>
+            </Card>            <Card className="p-6">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Source</h3>
+              <div className="space-y-3">
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-500">Type</span>
+                  <span className="text-sm text-gray-900 capitalize">
+                    {sourceInfo.type}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-500">Configuration</span>
+                  <span className="text-sm text-gray-900">
+                    {sourceInfo.details}
+                  </span>
+                </div>
+              </div>
+            </Card>
+
+            <Card className="p-6">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Transform</h3>
+              <div className="space-y-3">
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-500">Pipeline</span>
+                  <span className="text-sm text-gray-900">
+                    {transformInfo}
+                  </span>
+                </div>
+              </div>
+            </Card>
+
+            <Card className="p-6">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Sink</h3>
+              <div className="space-y-3">
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-500">Type</span>
+                  <span className="text-sm text-gray-900 capitalize">
+                    {sinkInfo.types}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-500">Configuration</span>
+                  <span className="text-sm text-gray-900">
+                    {sinkInfo.details}
+                  </span>
+                </div>
+              </div>
+            </Card>
+          </div>
+
+          {/* Recent Activity */}
+          <Card className="p-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Recent Activity</h3>
+            <div className="space-y-4">
+              <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+                <div className="flex-shrink-0">
+                  <div className="h-2 w-2 bg-green-400 rounded-full"></div>
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm text-gray-900">Pipeline created</p>
+                  <p className="text-xs text-gray-500">{formatDate(pipeline.created_at)}</p>
+                </div>
+              </div>
+            </div>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="configuration" className="space-y-6">
+          <Card className="p-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Pipeline Configuration</h3>            <pre className="bg-gray-50 p-4 rounded-lg text-sm overflow-x-auto">
+              {JSON.stringify({
+                sources: pipeline.sources_config,
+                transforms: pipeline.transforms_config,
+                sinks: pipeline.sinks_config
+              }, null, 2)}
+            </pre>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="metrics" className="space-y-6">
+          <Card className="p-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Pipeline Metrics</h3>
+            <div className="text-center py-8 text-gray-500">
+              <BarChart3 className="h-12 w-12 mx-auto mb-4" />
+              <p>Metrics will be displayed here when available</p>
+            </div>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="logs" className="space-y-6">
+          <Card className="p-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Pipeline Logs</h3>
+            <div className="text-center py-8 text-gray-500">
+              <FileText className="h-12 w-12 mx-auto mb-4" />
+              <p>Logs will be displayed here when available</p>
+            </div>
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        isOpen={deleteModal}
+        onClose={() => setDeleteModal(false)}
+        title="Delete Pipeline"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">
+            Are you sure you want to delete the pipeline "{pipeline.name}"? 
+            This action cannot be undone.
+          </p>
+          <div className="flex justify-end space-x-3">
+            <Button
+              variant="secondary"
+              onClick={() => setDeleteModal(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="error"
+              onClick={handleDeletePipeline}
+            >
+              Delete
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    </div>
+  );
+};

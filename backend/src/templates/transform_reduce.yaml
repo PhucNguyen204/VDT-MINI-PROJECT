@@ -1,0 +1,27 @@
+# Transform Template: Reduce/Filter Fields
+# Chức năng: Chọn lọc fields cần thiết và clean up data
+reduce_transform:
+  type: remap
+  inputs: ["DYNAMIC_INPUT"]
+  source: |
+    . = {
+      "timestamp": .timestamp,
+      "message": .message,
+      "pipeline": .pipeline,
+      "source_type": .source_type
+    }
+    
+    # Thêm container_name chỉ nếu tồn tại (cho Docker logs)
+    if exists(.container_name) {
+      .container_name = .container_name
+    }
+    
+    # Thêm cluster_id nếu có
+    if exists(.cluster_id) {
+      .cluster_id = .cluster_id
+    }
+    
+    # Thêm environment nếu có
+    if exists(.environment) {
+      .environment = .environment
+    }

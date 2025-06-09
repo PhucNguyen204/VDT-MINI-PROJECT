@@ -1,0 +1,15 @@
+# Transform Template: Parse Logs
+# Chức năng: Parse JSON từ message và thêm timestamp
+parse_transform:
+  type: remap
+  inputs: ["DYNAMIC_INPUT"]
+  source: |
+    # Thử parse JSON, nếu thành công thì merge, nếu không thì giữ nguyên
+    parsed, err = parse_json(.message)
+    if err == null {
+      . = merge!(., parsed)
+    }
+    # Đảm bảo có timestamp
+    if !exists(.timestamp) {
+      .timestamp = now()
+    }

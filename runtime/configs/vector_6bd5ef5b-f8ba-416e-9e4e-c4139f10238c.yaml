@@ -1,0 +1,151 @@
+data_dir: /var/lib/vector
+api:
+  enabled: true
+  address: 0.0.0.0:8686
+  playground: true
+telemetry:
+  metrics:
+    enabled: true
+sources:
+  http_source:
+    type: http_server
+    address: 0.0.0.0:8090
+  file_source:
+    type: file
+    include:
+      - D:/demo_VDT/runtime/logs/*.log
+    exclude: []
+    ignore_older_secs: 86400
+    max_read_bytes: 2048
+    start_at_beginning: true
+    fingerprint:
+      strategy: checksum
+      ignored_header_bytes: 0
+transforms:
+  http_source_parse_0:
+    type: remap
+    inputs:
+      - http_source
+    source: |
+      # Thử parse JSON, nếu thành công thì merge, nếu không thì giữ nguyên
+      parsed, err = parse_json(.message)
+      if err == null {
+        . = merge!(., parsed)
+      }
+      # Đảm bảo có timestamp
+      if !exists(.timestamp) {
+        .timestamp = now()
+      }
+  http_source_enrich_1:
+    type: remap
+    inputs:
+      - http_source_parse_0
+    source: |
+      .pipeline = "demo_pipeline_1"
+      if !exists(.source_type) {
+        .source_type = "http_source"
+      }
+      # Thêm cluster info nếu có
+      if !is_empty("${CLUSTER_ID-}") {
+        .cluster_id = "${CLUSTER_ID-}"
+      }
+      # Thêm environment info
+      if !is_empty("${ENVIRONMENT-}") {
+        .environment = "${ENVIRONMENT-}"
+      }
+  file_source_parse_0:
+    type: remap
+    inputs:
+      - file_source
+    source: |
+      # Thử parse JSON, nếu thành công thì merge, nếu không thì giữ nguyên
+      parsed, err = parse_json(.message)
+      if err == null {
+        . = merge!(., parsed)
+      }
+      # Đảm bảo có timestamp
+      if !exists(.timestamp) {
+        .timestamp = now()
+      }
+  file_source_enrich_1:
+    type: remap
+    inputs:
+      - file_source_parse_0
+    source: |
+      .pipeline = "demo_pipeline_1"
+      if !exists(.source_type) {
+        .source_type = "file_source"
+      }
+      # Thêm cluster info nếu có
+      if !is_empty("${CLUSTER_ID-}") {
+        .cluster_id = "${CLUSTER_ID-}"
+      }
+      # Thêm environment info
+      if !is_empty("${ENVIRONMENT-}") {
+        .environment = "${ENVIRONMENT-}"
+      }
+sinks:
+  http_source_s3_0:
+    type: aws_s3
+    inputs:
+      - http_source_enrich_1
+    bucket: phucnguyen204
+    region: ap-southeast-2
+    key_prefix: custom-logs/http_source/%Y/%m/%d/
+    compression: gzip
+    encoding:
+      codec: json
+    batch:
+      max_events: 1
+      timeout_secs: 10
+    auth:
+      access_key_id: AKIA5YG3CCI7MXG5KIE7
+      secret_access_key: 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
+  http_source_s3_1:
+    type: aws_s3
+    inputs:
+      - http_source_enrich_1
+    bucket: phucnguyenhttp
+    region: ap-southeast-2
+    key_prefix: custom-logs/http_source/%Y/%m/%d/
+    compression: gzip
+    encoding:
+      codec: json
+    batch:
+      max_events: 1
+      timeout_secs: 10
+    auth:
+      access_key_id: AKIA5YG3CCI7MXG5KIE7
+      secret_access_key: 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
+  file_source_s3_0:
+    type: aws_s3
+    inputs:
+      - file_source_enrich_1
+    bucket: phucnguyen204file
+    region: ap-southeast-2
+    key_prefix: custom-logs/file_source/%Y/%m/%d/
+    compression: gzip
+    encoding:
+      codec: json
+    batch:
+      max_events: 1
+      timeout_secs: 10
+    auth:
+      access_key_id: AKIA5YG3CCI7MXG5KIE7
+      secret_access_key: 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
+  file_source_s3_1:
+    type: aws_s3
+    inputs:
+      - file_source_enrich_1
+    bucket: phucnguyen204
+    region: ap-southeast-2
+    key_prefix: custom-logs/file_source/%Y/%m/%d/
+    compression: gzip
+    encoding:
+      codec: json
+    batch:
+      max_events: 1
+      timeout_secs: 10
+    auth:
+      access_key_id: AKIA5YG3CCI7MXG5KIE7
+      secret_access_key: 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

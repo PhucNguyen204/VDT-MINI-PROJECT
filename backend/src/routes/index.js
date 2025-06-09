@@ -1,21 +1,21 @@
 import { Router } from 'express';
-import { createPipeline } from '../controllers/pipeline.controller.js';
-import multiPipelinesRouter from './multiPipelines.js';
-import pipelineManagementRouter from './pipeline_management.js';
-import monitoringRouter from './monitoring.js';
+import customMonitorRouter from './monitor_route.js';
+import customPipelinesRouter from './init_route.js';
+import manageRouter from './manage_route.js';
+import schedulerRouter from './scheduler_route.js';
 
 const router = Router();
 
-// Legacy single pipeline endpoint
-router.post('/pipeline', createPipeline);
+// Custom pipeline endpoints
+router.use('/custom-pipelines', customPipelinesRouter);
 
-// New multi-pipeline endpoints  
-router.use('/multi-pipelines', multiPipelinesRouter);
+// Custom pipeline management endpoints (đơn giản)
+router.use('/manage', manageRouter);
 
-// Pipeline management endpoints
-router.use('/pipeline-management', pipelineManagementRouter);
+// Custom monitoring endpoints
+router.use('/custom-monitoring', customMonitorRouter);
 
-// Monitoring endpoints
-router.use('/monitoring', monitoringRouter);
+// Automated metrics collection scheduler
+router.use('/scheduler', schedulerRouter);
 
 export default router;
