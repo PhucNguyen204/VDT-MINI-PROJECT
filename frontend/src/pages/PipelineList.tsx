@@ -123,7 +123,7 @@ export const PipelineList: React.FC = () => {  const {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Pipelines</h1>
-          <p className="text-gray-600">Manage your vector data processing pipelines</p>
+          <p className="text-gray-600">Manage your data processing pipelines</p>
         </div>
         <div className="flex space-x-3">          <Button
             variant="secondary"

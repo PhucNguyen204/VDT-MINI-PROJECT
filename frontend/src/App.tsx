@@ -5,8 +5,8 @@ import {
   Dashboard, 
   PipelineList, 
   CreatePipeline, 
-  PipelineDetail, 
-  Monitoring
+  PipelineDetail
+  // Monitoring,
   // Settings 
 } from './pages';
 import './index.css';
@@ -21,7 +21,7 @@ function App() {
             <Route path="/pipelines" element={<PipelineList />} />
             <Route path="/pipelines/create" element={<CreatePipeline />} />
             <Route path="/pipelines/:id" element={<PipelineDetail />} />
-            <Route path="/monitoring" element={<Monitoring />} />
+            {/* <Route path="/monitoring" element={<Monitoring />} /> */}
             {/* <Route path="/settings" element={<Settings />} /> */}
           </Routes>
         </Layout>

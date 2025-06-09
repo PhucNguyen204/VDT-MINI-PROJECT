@@ -61,7 +61,7 @@ export const CreatePipeline: React.FC = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Create Pipeline</h1>
-          <p className="text-gray-600">Set up a new vector data processing pipeline</p>
+          <p className="text-gray-600">Set up a new data processing pipeline</p>
         </div>        <Button
           variant="secondary"
           onClick={() => navigate('/pipelines')}

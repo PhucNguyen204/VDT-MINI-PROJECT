@@ -1,1 +1,4 @@
 {"timestamp":"2025-06-08T12:16:00Z","level":"DEBUG","message":"Processing request","source":"file_test","request_id":"req-456"}
+{"timestamp":"2025-06-08T12:16:00Z","level":"DEBUG","message":"Processing request","source":"file_test","request_id":"req-456"}
+{"timestamp":"2025-06-09T14:15:00Z","level":"INFO","message":"New test log entry for file source validation","source":"file_test","component":"vector_pipeline_test","operation":"file_processing"}
+{"timestamp":"2025-06-09T14:18:00Z","level":"WARN","message":"Another test log entry to verify file monitoring","source":"file_test","component":"vector_pipeline_test","operation":"file_monitoring","status":"active"}

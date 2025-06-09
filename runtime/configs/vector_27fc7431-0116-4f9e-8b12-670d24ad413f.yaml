@@ -1,0 +1,52 @@
+data_dir: /var/lib/vector
+api:
+  enabled: true
+  address: 0.0.0.0:8686
+  playground: true
+telemetry:
+  metrics:
+    enabled: true
+sources:
+  source_1:
+    type: file
+    include:
+      - /runtime/logs/*.log
+    exclude: []
+    ignore_older_secs: 86400
+    max_read_bytes: 2048
+    read_from: beginning
+    fingerprint:
+      strategy: checksum
+      ignored_header_bytes: 0
+transforms:
+  source_1_parse_0:
+    type: remap
+    inputs:
+      - source_1
+    source: |
+      # Thử parse JSON, nếu thành công thì merge, nếu không thì giữ nguyên
+      parsed, err = parse_json(.message)
+      if err == null {
+        . = merge!(., parsed)
+      }
+      # Đảm bảo có timestamp
+      if !exists(.timestamp) {
+        .timestamp = now()
+      }
+sinks:
+  source_1_s3_0:
+    type: aws_s3
+    inputs:
+      - source_1_parse_0
+    bucket: phucnguyen204
+    region: ap-southeast-2
+    key_prefix: file2/
+    compression: gzip
+    encoding:
+      codec: json
+    batch:
+      max_events: 1
+      timeout_secs: 10
+    auth:
+      access_key_id: AKIA5YG3CCI7MXG5KIE7
+      secret_access_key: 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

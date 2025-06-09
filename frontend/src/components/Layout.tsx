@@ -4,8 +4,6 @@ import {
   Home,
   Database,
   Plus,
-  BarChart3,
-  Settings as SettingsIcon,
   Menu,
   X,
   Activity
@@ -19,8 +17,6 @@ const navigation = [
   { name: 'Dashboard', href: '/', icon: Home },
   { name: 'Pipelines', href: '/pipelines', icon: Database },
   { name: 'Create Pipeline', href: '/pipelines/create', icon: Plus },
-  { name: 'Monitoring', href: '/monitoring', icon: BarChart3 },
-  { name: 'Settings', href: '/settings', icon: SettingsIcon },
 ];
 
 export const Layout: React.FC<LayoutProps> = ({ children }) => {
@@ -41,11 +37,10 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             >
               <X className="h-6 w-6 text-white" />
             </button>
-          </div>
-          <div className="h-0 flex-1 overflow-y-auto pt-5 pb-4">
+          </div>          <div className="h-0 flex-1 overflow-y-auto pt-5 pb-4">
             <div className="flex flex-shrink-0 items-center px-4">
               <Activity className="h-8 w-8 text-primary-600" />
-              <span className="ml-2 text-xl font-bold text-gray-900">Vector Pipeline</span>
+              <span className="ml-2 text-xl font-bold text-gray-900">Data Pipeline Management</span>
             </div>
             <nav className="mt-5 space-y-1 px-2">
               {navigation.map((item) => {
@@ -74,11 +69,10 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
       {/* Static sidebar for desktop */}
       <div className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col">
-        <div className="flex min-h-0 flex-1 flex-col border-r border-gray-200 bg-white">
-          <div className="flex flex-1 flex-col overflow-y-auto pt-5 pb-4">
+        <div className="flex min-h-0 flex-1 flex-col border-r border-gray-200 bg-white">          <div className="flex flex-1 flex-col overflow-y-auto pt-5 pb-4">
             <div className="flex flex-shrink-0 items-center px-4">
               <Activity className="h-8 w-8 text-primary-600" />
-              <span className="ml-2 text-xl font-bold text-gray-900">Vector Pipeline</span>
+              <span className="ml-2 text-xl font-bold text-gray-900">Data Pipeline Management</span>
             </div>
             <nav className="mt-5 flex-1 space-y-1 bg-white px-2">
               {navigation.map((item) => {

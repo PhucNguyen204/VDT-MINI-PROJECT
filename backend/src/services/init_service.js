@@ -148,7 +148,8 @@ function buildSources(sourcesSpec) {
           exclude: sourceConfig.exclude || [],
           ignore_older_secs: sourceConfig.ignore_older_secs || 86400,
           max_read_bytes: sourceConfig.max_read_bytes || 2048,
-          start_at_beginning: sourceConfig.start_at_beginning !== false,
+          // start_at_beginning: sourceConfig.start_at_beginning !== false,
+          read_from: 'beginning',
           fingerprint: {
             strategy: sourceConfig.fingerprint_strategy || 'checksum',
             ignored_header_bytes: sourceConfig.ignored_header_bytes || 0
