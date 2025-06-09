@@ -21,13 +21,19 @@ export interface Pipeline {
 
 // Source Configuration Types
 export interface SourceConfig {
-  type: 'file' | 'http' | 'prometheus_scrape';
+  type: 'file' | 'http' | 'prometheus_scrape' | 'docker_logs' | 'syslog';
   include?: string[];
   listen_port?: number;
   endpoints?: string[];
   scrape_interval_secs?: number;
   path?: string;
   auth?: AuthConfig;
+  // Docker logs specific
+  include_containers?: string[];
+  exclude_containers?: string[];
+  // Syslog specific
+  mode?: 'tcp' | 'udp';
+  address?: string;
 }
 
 export interface AuthConfig {
@@ -108,7 +114,7 @@ export interface SourceConfigData {
 }
 
 export interface SourceFormData {
-  type: 'file' | 'http' | 'prometheus_scrape';
+  type: 'file' | 'http' | 'prometheus_scrape' | 'docker_logs' | 'syslog';
   // File source fields
   path?: string;
   patterns?: string[];
@@ -128,6 +134,14 @@ export interface SourceFormData {
   scrape_interval?: number;
   authType?: 'none' | 'basic' | 'bearer';
   metricsFilter?: string;
+  
+  // Docker logs specific
+  include_containers?: string[];
+  exclude_containers?: string[];
+  
+  // Syslog specific
+  mode?: 'tcp' | 'udp';
+  address?: string;
 }
 
 export interface SinkFormData {
@@ -137,13 +151,16 @@ export interface SinkFormData {
     bucket?: string;
     region?: string;
     prefix?: string;
+    key_prefix?: string;
     compression?: string;
     format?: string;
+    encoding?: string;
     access_key_id?: string;
     secret_access_key?: string;
     
     // Console sink
     prettyPrint?: boolean;
+    pretty_print?: boolean;
     includeMetadata?: boolean;
     
     // CloudWatch sink
@@ -153,6 +170,13 @@ export interface SinkFormData {
     // Elasticsearch sink
     index?: string;
     indexType?: string;
+    doc_type?: string;
+    endpoints?: string[];
+    username?: string;
+    password?: string;
+    
+    // Common fields
+    [key: string]: any; // Allow additional properties
   };
 }
 

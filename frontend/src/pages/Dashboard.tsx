@@ -48,7 +48,8 @@ export const Dashboard: React.FC = () => {
       default:
         return 'warning' as const;
     }
-  };  const statCards = [
+  };  // Use overview data from API, fallback to pipeline count only for total
+  const statCards = [
     {
       title: 'Total Pipelines',
       value: overview?.totalPipelines || pipelines.length,
@@ -57,20 +58,20 @@ export const Dashboard: React.FC = () => {
     },
     {
       title: 'Healthy',
-      value: overview?.healthyPipelines || pipelines.filter(p => p.status === 'running').length,
+      value: overview?.healthyPipelines || 0,
       icon: Play,
       color: 'text-success-600'
     },
     {
       title: 'Unhealthy',
-      value: overview?.unhealthyPipelines || pipelines.filter(p => p.status === 'stopped' || p.status === 'error').length,
-      icon: Pause,
-      color: 'text-gray-600'
+      value: overview?.unhealthyPipelines || 0,
+      icon: XCircle,
+      color: 'text-error-600'
     },
     {
       title: 'Events Processed',
       value: overview?.totalEventsProcessed || 0,
-      icon: AlertTriangle,
+      icon: BarChart3,
       color: 'text-primary-600'
     }
   ];

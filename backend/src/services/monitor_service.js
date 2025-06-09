@@ -926,3 +926,7 @@ export const customMonitorService = new CustomMonitorService();
 
 // Export class for direct usage
 export { CustomVectorMetricsCollector };
+
+
+
+

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   BarChart3,
   Activity,
@@ -15,11 +15,24 @@ import {
   Settings,
   Play,
   Pause,
-  Table
+  Table,
+  Timer,
+  Save,
+  RotateCcw,
+  BarChart4
 } from 'lucide-react';
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer
+} from 'recharts';
 import { Card, Badge } from '../ui/UIElements';
 import { Button, Select } from '../ui/FormElements';
-import { metricsApi } from '../../services/api';
+import { metricsApi, schedulerApi } from '../../services/api';
 import { formatDate } from '../../utils';
 
 interface PipelineMetricsProps {
@@ -43,6 +56,13 @@ interface HealthStatus {
   details?: string;
 }
 
+interface AutoCollectionConfig {
+  enabled: boolean;
+  interval: number; // seconds
+  lastRun?: string;
+  nextRun?: string;
+}
+
 const TIME_RANGES = [
   { value: '15m', label: '15 minutes' },
   { value: '1h', label: '1 hour' },
@@ -60,45 +80,156 @@ const METRIC_CATEGORIES = [
   { value: 'health', label: 'Health' }
 ];
 
+const AUTO_COLLECTION_INTERVALS = [
+  { value: 30, label: '30 seconds' },
+  { value: 60, label: '1 minute' },
+  { value: 120, label: '2 minutes' },
+  { value: 300, label: '5 minutes' },
+  { value: 600, label: '10 minutes' },
+  { value: 1800, label: '30 minutes' },
+  { value: 3600, label: '1 hour' }
+];
+
 export const PipelineMetrics: React.FC<PipelineMetricsProps> = ({
   pipelineId,
   pipelineName,
   pipelineStatus
-}) => {  const [metrics, setMetrics] = useState<MetricData[]>([]);
+}) => {
+  const [metrics, setMetrics] = useState<MetricData[]>([]);
   const [currentMetrics, setCurrentMetrics] = useState<MetricData[]>([]);
   const [healthStatus, setHealthStatus] = useState<HealthStatus>({ status: 'unknown', lastCheck: '' });
   const [loading, setLoading] = useState(false);
   const [collecting, setCollecting] = useState(false);
-  const [autoCollectEnabled, setAutoCollectEnabled] = useState(false);
   const [timeRange, setTimeRange] = useState('1h');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [lastCollectionTime, setLastCollectionTime] = useState<string>('');
   const [showCurrentMetrics, setShowCurrentMetrics] = useState(true);
+  const [showAutoCollectionSettings, setShowAutoCollectionSettings] = useState(false);
+  const [chartDataPoints, setChartDataPoints] = useState<'10' | '20' | '50'>('10');
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  
+  // Auto-collection configuration
+  const [autoCollectionConfig, setAutoCollectionConfig] = useState<AutoCollectionConfig>({
+    enabled: false,
+    interval: 60
+  });
+  const [tempInterval, setTempInterval] = useState(60);
+  const [remainingSeconds, setRemainingSeconds] = useState(0);
+  const autoCollectIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const nextRunTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
   // Load initial data
   useEffect(() => {
     const loadInitialData = async () => {
       await Promise.all([
         loadMetrics(),
         loadDashboard(),
-        loadHealth()
+        loadHealth(),
+        loadSchedulerStatus()
       ]);
     };
     loadInitialData();
   }, [pipelineId, timeRange, selectedCategory]);
 
-  // Auto-refresh every 30 seconds
+  // Setup auto-collection when enabled
   useEffect(() => {
-    if (!autoCollectEnabled) return;
+    if (autoCollectionConfig.enabled && pipelineStatus === 'running') {
+      setupAutoCollection();
+    } else {
+      clearAutoCollection();
+    }
 
-    const interval = setInterval(async () => {
-      await Promise.all([
-        loadMetrics(),
-        loadHealth()
-      ]);
-    }, 30000);
+    return () => clearAutoCollection();
+  }, [autoCollectionConfig.enabled, autoCollectionConfig.interval, pipelineStatus]);
 
-    return () => clearInterval(interval);
-  }, [autoCollectEnabled, timeRange, selectedCategory]);  const loadMetrics = async () => {
+  // Countdown timer effect
+  useEffect(() => {
+    if (autoCollectionConfig.enabled && remainingSeconds > 0) {
+      countdownIntervalRef.current = setInterval(() => {
+        setRemainingSeconds(prev => {
+          if (prev <= 1) {
+            return autoCollectionConfig.interval; // Reset to full interval
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } else {
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current);
+        countdownIntervalRef.current = null;
+      }
+    }
+
+    return () => {
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current);
+        countdownIntervalRef.current = null;
+      }
+    };
+  }, [autoCollectionConfig.enabled, remainingSeconds, autoCollectionConfig.interval]);
+
+  const setupAutoCollection = () => {
+    clearAutoCollection();
+    
+    const intervalMs = autoCollectionConfig.interval * 1000;
+    
+    // Start countdown
+    setRemainingSeconds(autoCollectionConfig.interval);
+    
+    // Immediate collection
+    handleManualCollection();
+    
+    // Setup recurring collection
+    autoCollectIntervalRef.current = setInterval(async () => {
+      console.log(`🔄 Auto-collecting metrics for ${pipelineName} every ${autoCollectionConfig.interval}s`);
+      setRemainingSeconds(autoCollectionConfig.interval); // Reset countdown
+      await handleManualCollection();
+    }, intervalMs);
+    
+    // Calculate next run time
+    const nextRun = new Date(Date.now() + intervalMs);
+    setAutoCollectionConfig(prev => ({
+      ...prev,
+      nextRun: nextRun.toISOString(),
+      lastRun: new Date().toISOString()
+    }));
+  };
+
+  const clearAutoCollection = () => {
+    if (autoCollectIntervalRef.current) {
+      clearInterval(autoCollectIntervalRef.current);
+      autoCollectIntervalRef.current = null;
+    }
+    if (nextRunTimeoutRef.current) {
+      clearTimeout(nextRunTimeoutRef.current);
+      nextRunTimeoutRef.current = null;
+    }
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current);
+      countdownIntervalRef.current = null;
+    }
+    setRemainingSeconds(0);
+  };
+
+  const loadSchedulerStatus = async () => {
+    try {
+      const status = await schedulerApi.getStatus();
+      if (status) {
+        setAutoCollectionConfig(prev => ({
+          ...prev,
+          enabled: status.is_running || false,
+          interval: status.interval_seconds || 60
+        }));
+        setTempInterval(status.interval_seconds || 60);
+      }
+    } catch (error) {
+      console.error('Failed to load scheduler status:', error);
+    }
+  };
+
+  const loadMetrics = async () => {
     try {
       setLoading(true);
       const category = selectedCategory === 'all' ? undefined : selectedCategory;
@@ -168,10 +299,10 @@ export const PipelineMetrics: React.FC<PipelineMetricsProps> = ({
       setLoading(false);
     }
   };
+
   const loadDashboard = async () => {
     try {
       await metricsApi.getDashboard(pipelineId, timeRange);
-      // Dashboard data can be used for advanced metrics visualization in the future
     } catch (error) {
       console.error('Failed to load dashboard:', error);
     }
@@ -189,7 +320,9 @@ export const PipelineMetrics: React.FC<PipelineMetricsProps> = ({
       console.error('Failed to load health:', error);
       setHealthStatus({ status: 'error', lastCheck: new Date().toISOString() });
     }
-  };  const handleManualCollection = async () => {
+  };
+
+  const handleManualCollection = async () => {
     try {
       setCollecting(true);
       const collectResponse = await metricsApi.collect(pipelineId);
@@ -380,7 +513,8 @@ export const PipelineMetrics: React.FC<PipelineMetricsProps> = ({
           }
         });
       }
-        console.log('Immediate metrics parsed:', immediateMetrics);
+      
+      console.log('Immediate metrics parsed:', immediateMetrics);
       
       // Update current metrics state for immediate display
       setCurrentMetrics(immediateMetrics);
@@ -399,7 +533,8 @@ export const PipelineMetrics: React.FC<PipelineMetricsProps> = ({
           return updated;
         });
       }
-        // Cập nhật health status nếu có
+      
+      // Update health status if available
       if (collectResponse.health_data) {
         setHealthStatus({
           status: collectResponse.health_data.healthy ? 'healthy' : 'error',
@@ -407,6 +542,12 @@ export const PipelineMetrics: React.FC<PipelineMetricsProps> = ({
           details: collectResponse.health_data.details
         });
       }
+      
+      // Update auto-collection config with last run time
+      setAutoCollectionConfig(prev => ({
+        ...prev,
+        lastRun: currentTimestamp
+      }));
       
       // Refresh historical metrics from database after a short delay
       setTimeout(async () => {
@@ -424,13 +565,63 @@ export const PipelineMetrics: React.FC<PipelineMetricsProps> = ({
 
   const handleAutoCollectToggle = async () => {
     try {
-      if (!autoCollectEnabled) {
-        // Start auto-collection by collecting all pipelines
-        await metricsApi.collectAll();
+      if (!autoCollectionConfig.enabled) {
+        // Start auto-collection with current interval
+        await schedulerApi.start(autoCollectionConfig.interval);
+        setAutoCollectionConfig(prev => ({ ...prev, enabled: true }));
+        setRemainingSeconds(autoCollectionConfig.interval);
+      } else {
+        // Stop auto-collection
+        await schedulerApi.stop();
+        setAutoCollectionConfig(prev => ({ ...prev, enabled: false }));
+        setRemainingSeconds(0);
       }
-      setAutoCollectEnabled(!autoCollectEnabled);
     } catch (error) {
       console.error('Failed to toggle auto-collection:', error);
+    }
+  };
+
+  const handleSaveAutoCollectionSettings = async () => {
+    try {
+      if (autoCollectionConfig.enabled) {
+        // Update scheduler interval
+        await schedulerApi.updateInterval(tempInterval);
+      }
+      
+      setAutoCollectionConfig(prev => ({
+        ...prev,
+        interval: tempInterval
+      }));
+      
+      setShowAutoCollectionSettings(false);
+    } catch (error) {
+      console.error('Failed to save auto-collection settings:', error);
+    }
+  };
+
+  const handleDeleteMetrics = async () => {
+    try {
+      setIsDeleting(true);
+      const result = await metricsApi.deleteMetrics(pipelineId);
+      
+      console.log('✅ Metrics deleted:', result);
+      
+      // Clear local metrics data
+      setMetrics([]);
+      setCurrentMetrics([]);
+      
+      // Close confirm dialog
+      setShowDeleteConfirm(false);
+      
+      // Optionally reload fresh data after a short delay
+      setTimeout(() => {
+        loadMetrics();
+      }, 1000);
+      
+    } catch (error) {
+      console.error('❌ Failed to delete metrics:', error);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -480,6 +671,14 @@ export const PipelineMetrics: React.FC<PipelineMetricsProps> = ({
     return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${sizes[i]}`;
   };
 
+  const formatCountdown = (seconds: number) => {
+    if (seconds <= 0) return '0s';
+    if (seconds < 60) return `${seconds}s`;
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return remainingSeconds > 0 ? `${minutes}m ${remainingSeconds}s` : `${minutes}m`;
+  };
+
   const groupMetricsByType = (metrics: MetricData[]) => {
     return metrics.reduce((acc, metric) => {
       const key = `${metric.category}_${metric.metric_type}`;
@@ -513,6 +712,71 @@ export const PipelineMetrics: React.FC<PipelineMetricsProps> = ({
     return <Minus className="h-4 w-4 text-gray-400" />;
   };
 
+  const formatChartDataByMetric = () => {
+    const limit = parseInt(chartDataPoints);
+    const recentMetrics = metrics
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      .slice(0, limit)
+      .reverse(); // Reverse to show oldest to newest
+
+    // Group by metric type
+    const metricGroups: Record<string, any[]> = {};
+    
+    recentMetrics.forEach(metric => {
+      const metricKey = getMetricDisplayName(metric.metric_type);
+      if (!metricGroups[metricKey]) {
+        metricGroups[metricKey] = [];
+      }
+      
+      metricGroups[metricKey].push({
+        timestamp: metric.timestamp,
+        time_label: new Date(metric.timestamp).toLocaleTimeString('vi-VN', { 
+          hour: '2-digit', 
+          minute: '2-digit'
+        }),
+        value: metric.value,
+        unit: metric.unit
+      });
+    });
+
+    return metricGroups;
+  };
+
+  const getMetricDisplayName = (metricType: string) => {
+    const mapping: Record<string, string> = {
+      'cpu_usage_percent': 'CPU (%)',
+      'memory_usage_percent': 'Memory (%)', 
+      'memory_usage': 'Memory (MB)',
+      'network_rx': 'Network RX (KB)',
+      'network_tx': 'Network TX (KB)', 
+      'block_read': 'Block Read (KB)',
+      'block_write': 'Block Write (KB)',
+      'vector_health_status': 'Pipeline Health',
+      'container_running': 'Container Status'
+    };
+    return mapping[metricType] || metricType;
+  };
+
+  const getMetricColor = (metricType: string) => {
+    const colors: Record<string, string> = {
+      'CPU (%)': '#3b82f6',
+      'Memory (%)': '#10b981',
+      'Memory (MB)': '#06b6d4',
+      'Network RX (KB)': '#8b5cf6',
+      'Network TX (KB)': '#a855f7',
+      'Block Read (KB)': '#f59e0b',
+      'Block Write (KB)': '#f97316',
+      'Health': '#ef4444',
+      'Metrics Count': '#6b7280'
+    };
+    return colors[metricType] || '#6b7280';
+  };
+
+  const getAvailableMetricTypes = () => {
+    const metricGroups = formatChartDataByMetric();
+    return Object.keys(metricGroups);
+  };
+
   const groupedMetrics = groupMetricsByType(metrics);
 
   return (
@@ -529,7 +793,8 @@ export const PipelineMetrics: React.FC<PipelineMetricsProps> = ({
           </div>
         </div>
         
-        <div className="flex flex-wrap items-center gap-3">          {/* Time Range Selector */}
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Time Range Selector */}
           <Select
             value={timeRange}
             onChange={setTimeRange}
@@ -545,21 +810,40 @@ export const PipelineMetrics: React.FC<PipelineMetricsProps> = ({
             className="w-auto"
           />
 
+          {/* Auto-collection Setup Button */}
+          <Button
+            variant="secondary"
+            onClick={() => setShowAutoCollectionSettings(!showAutoCollectionSettings)}
+            className="flex items-center"
+          >
+            <Timer className="h-4 w-4 mr-2" />
+            Auto Setup
+          </Button>
+
           {/* Auto-collect Toggle */}
           <Button
-            variant={autoCollectEnabled ? "primary" : "secondary"}
+            variant={autoCollectionConfig.enabled ? "primary" : "secondary"}
             onClick={handleAutoCollectToggle}
             className="flex items-center"
           >
-            {autoCollectEnabled ? (
+            {autoCollectionConfig.enabled ? (
               <>
                 <Pause className="h-4 w-4 mr-2" />
-                Auto Collect: ON
+                {remainingSeconds > 0 ? (
+                  <span className="flex items-center">
+                    Auto: ON
+                    <span className="ml-1 px-2 py-1 bg-white/20 rounded text-xs font-mono">
+                      {formatCountdown(remainingSeconds)}
+                    </span>
+                  </span>
+                ) : (
+                  `Auto: ON (${autoCollectionConfig.interval}s)`
+                )}
               </>
             ) : (
               <>
                 <Play className="h-4 w-4 mr-2" />
-                Auto Collect: OFF
+                Auto: OFF
               </>
             )}
           </Button>
@@ -581,7 +865,9 @@ export const PipelineMetrics: React.FC<PipelineMetricsProps> = ({
                 Collect Now
               </>
             )}
-          </Button>          <Button
+          </Button>
+
+          <Button
             variant="secondary"
             onClick={loadMetrics}
             disabled={loading}
@@ -602,8 +888,103 @@ export const PipelineMetrics: React.FC<PipelineMetricsProps> = ({
             <Table className="h-4 w-4 mr-2" />
             {showCurrentMetrics ? 'Current View' : 'Historical View'}
           </Button>
+
+          {/* Clear All Metrics */}
+          <Button
+            variant="error"
+            onClick={() => setShowDeleteConfirm(true)}
+            disabled={metrics.length === 0}
+            className="flex items-center"
+          >
+            <XCircle className="h-4 w-4 mr-2" />
+            Clear All ({metrics.length})
+          </Button>
         </div>
       </div>
+
+      {/* Auto-collection Settings Panel */}
+      {showAutoCollectionSettings && (
+        <Card className="p-6 border-l-4 border-l-blue-500 bg-blue-50">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center space-x-2">
+              <Settings className="h-5 w-5 text-blue-600" />
+              <h4 className="text-lg font-medium text-gray-900">Auto-Collection Settings</h4>
+            </div>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setTempInterval(autoCollectionConfig.interval);
+                setShowAutoCollectionSettings(false);
+              }}
+              className="text-sm"
+            >
+              <XCircle className="h-4 w-4 mr-1" />
+              Cancel
+            </Button>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Collection Interval
+              </label>
+                             <Select
+                 value={tempInterval.toString()}
+                 onChange={(value) => setTempInterval(parseInt(value))}
+                 options={AUTO_COLLECTION_INTERVALS.map(opt => ({ ...opt, value: opt.value.toString() }))}
+                 className="w-full"
+               />
+              <p className="text-xs text-gray-500 mt-1">
+                How often to automatically collect metrics
+              </p>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Current Status
+              </label>
+              <div className="space-y-2">
+                <div className="flex items-center space-x-2">
+                  <Badge variant={autoCollectionConfig.enabled ? 'success' : 'secondary'}>
+                    {autoCollectionConfig.enabled ? 'Enabled' : 'Disabled'}
+                  </Badge>
+                  <span className="text-sm text-gray-600">
+                    Current interval: {autoCollectionConfig.interval}s
+                  </span>
+                </div>
+                {autoCollectionConfig.lastRun && (
+                  <p className="text-xs text-gray-500">
+                    Last run: {formatDate(autoCollectionConfig.lastRun)}
+                  </p>
+                )}
+                {autoCollectionConfig.nextRun && autoCollectionConfig.enabled && (
+                  <p className="text-xs text-gray-500">
+                    Next run: {formatDate(autoCollectionConfig.nextRun)}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+          
+          <div className="flex justify-end space-x-3 mt-6">
+            <Button
+              variant="secondary"
+              onClick={() => setTempInterval(60)}
+              className="flex items-center"
+            >
+              <RotateCcw className="h-4 w-4 mr-2" />
+              Reset to Default
+            </Button>
+            <Button
+              onClick={handleSaveAutoCollectionSettings}
+              className="flex items-center"
+            >
+              <Save className="h-4 w-4 mr-2" />
+              Save Settings
+            </Button>
+          </div>
+        </Card>
+      )}
 
       {/* Status Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -648,10 +1029,23 @@ export const PipelineMetrics: React.FC<PipelineMetricsProps> = ({
             <div>
               <p className="text-sm text-gray-500">Auto Collection</p>
               <p className="text-lg font-medium text-gray-900">
-                {autoCollectEnabled ? 'Enabled' : 'Disabled'}
+                {autoCollectionConfig.enabled ? (
+                  remainingSeconds > 0 ? (
+                    <span className="flex items-center">
+                      <span className="mr-2">Next in</span>
+                      <span className="px-2 py-1 bg-green-100 text-green-800 rounded text-sm font-mono">
+                        {formatCountdown(remainingSeconds)}
+                      </span>
+                    </span>
+                  ) : (
+                    `Every ${autoCollectionConfig.interval}s`
+                  )
+                ) : (
+                  'Disabled'
+                )}
               </p>
             </div>
-            <Zap className={`h-8 w-8 ${autoCollectEnabled ? 'text-green-500' : 'text-gray-400'}`} />
+            <Zap className={`h-8 w-8 ${autoCollectionConfig.enabled ? 'text-green-500' : 'text-gray-400'}`} />
           </div>
           {lastCollectionTime && (
             <p className="text-xs text-gray-400 mt-2">
@@ -675,7 +1069,9 @@ export const PipelineMetrics: React.FC<PipelineMetricsProps> = ({
             {selectedCategory === 'all' ? 'All categories' : selectedCategory}
           </p>
         </Card>
-      </div>      {/* Metrics Display */}
+      </div>
+
+      {/* Metrics Display */}
       {showCurrentMetrics ? (
         /* Current/Real-time Metrics View */
         currentMetrics.length > 0 ? (
@@ -783,10 +1179,128 @@ export const PipelineMetrics: React.FC<PipelineMetricsProps> = ({
             <div>
               <div className="flex items-center justify-between mb-4">
                 <h4 className="text-lg font-medium text-gray-900">Historical Metrics Overview</h4>
-                <Badge variant="secondary">
-                  {TIME_RANGES.find(r => r.value === timeRange)?.label}
-                </Badge>
+                <div className="flex items-center space-x-3">
+                  <Select
+                    value={chartDataPoints}
+                    onChange={(value) => setChartDataPoints(value as '10' | '20' | '50')}
+                    options={[
+                      { value: '10', label: '10 lần gần nhất' },
+                      { value: '20', label: '20 lần gần nhất' },
+                      { value: '50', label: '50 lần gần nhất' }
+                    ]}
+                    className="w-auto"
+                  />
+                  <Badge variant="secondary">
+                    {TIME_RANGES.find(r => r.value === timeRange)?.label}
+                  </Badge>
+                </div>
               </div>
+
+              {/* Individual Line Charts */}
+              {getAvailableMetricTypes().length > 0 && (
+                <div className="mb-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center space-x-2">
+                      <BarChart4 className="h-5 w-5 text-blue-600" />
+                      <h5 className="text-lg font-medium text-gray-900">
+                        Biểu đồ Metrics ({chartDataPoints} lần gần nhất)
+                      </h5>
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {Object.entries(formatChartDataByMetric()).map(([metricType, data]) => (
+                      <Card key={metricType} className="p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <h6 className="text-sm font-medium text-gray-900">{metricType}</h6>
+                          <Badge variant="secondary" className="text-xs">
+                            {data.length} points
+                          </Badge>
+                        </div>
+                        
+                        <div className="h-32 w-full">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <LineChart
+                              data={data}
+                              margin={{ top: 5, right: 5, left: 5, bottom: 5 }}
+                            >
+                              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                              <XAxis 
+                                dataKey="time_label"
+                                tick={{ fontSize: 10 }}
+                                interval="preserveStartEnd"
+                                axisLine={false}
+                                tickLine={false}
+                              />
+                              <YAxis 
+                                tick={{ fontSize: 10 }}
+                                axisLine={false}
+                                tickLine={false}
+                                width={30}
+                              />
+                              <Tooltip 
+                                labelFormatter={(label) => `Time: ${label}`}
+                                formatter={(value: any) => {
+                                  if (metricType.includes('(%)')) {
+                                    return [`${value.toFixed(2)}%`, metricType];
+                                  } else if (metricType.includes('(MB)')) {
+                                    return [`${(value / (1024 * 1024)).toFixed(2)} MB`, metricType];
+                                  } else if (metricType.includes('(KB)')) {
+                                    return [`${(value / 1024).toFixed(2)} KB`, metricType];
+                                  }
+                                  return [value.toFixed(2), metricType];
+                                }}
+                                contentStyle={{
+                                  backgroundColor: '#f9fafb',
+                                  border: '1px solid #e5e7eb',
+                                  borderRadius: '6px',
+                                  fontSize: '12px'
+                                }}
+                              />
+                              <Line 
+                                type="monotone" 
+                                dataKey="value" 
+                                stroke={getMetricColor(metricType)} 
+                                strokeWidth={2}
+                                dot={{ fill: getMetricColor(metricType), r: 3 }}
+                                activeDot={{ r: 4, stroke: getMetricColor(metricType), strokeWidth: 2, fill: '#fff' }}
+                              />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        </div>
+                        
+                        {/* Mini stats */}
+                        <div className="mt-2 flex justify-between text-xs text-gray-500">
+                          <span>
+                            Latest: {data.length > 0 ? 
+                              (metricType.includes('(%)') ? 
+                                `${data[data.length - 1].value.toFixed(1)}%` :
+                              metricType.includes('(MB)') ?
+                                `${(data[data.length - 1].value / (1024 * 1024)).toFixed(1)} MB` :
+                              metricType.includes('(KB)') ?
+                                `${(data[data.length - 1].value / 1024).toFixed(1)} KB` :
+                                data[data.length - 1].value.toFixed(1)
+                              ) : 'N/A'
+                            }
+                          </span>
+                          <span>
+                            Avg: {data.length > 0 ? 
+                              (metricType.includes('(%)') ? 
+                                `${(data.reduce((a, b) => a + b.value, 0) / data.length).toFixed(1)}%` :
+                              metricType.includes('(MB)') ?
+                                `${((data.reduce((a, b) => a + b.value, 0) / data.length) / (1024 * 1024)).toFixed(1)} MB` :
+                              metricType.includes('(KB)') ?
+                                `${((data.reduce((a, b) => a + b.value, 0) / data.length) / 1024).toFixed(1)} KB` :
+                                (data.reduce((a, b) => a + b.value, 0) / data.length).toFixed(1)
+                              ) : 'N/A'
+                            }
+                          </span>
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
                 {Object.entries(groupedMetrics).map(([key, metricGroup]) => {
                   const latestMetric = metricGroup.values[metricGroup.values.length - 1];
@@ -919,7 +1433,8 @@ export const PipelineMetrics: React.FC<PipelineMetricsProps> = ({
               </Card>
             </div>
           </div>
-        ) : (<          <Card className="p-8">
+        ) : (
+          <Card className="p-8">
             <div className="text-center">
               {loading ? (
                 <div className="space-y-4">
@@ -968,6 +1483,63 @@ export const PipelineMetrics: React.FC<PipelineMetricsProps> = ({
             {healthStatus.details}
           </pre>
         </Card>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <Card className="max-w-md w-full mx-4">
+            <div className="p-6">
+              <div className="flex items-center mb-4">
+                <AlertTriangle className="h-8 w-8 text-red-500 mr-3" />
+                <h3 className="text-lg font-medium text-gray-900">
+                  Xác nhận xóa toàn bộ metrics
+                </h3>
+              </div>
+              
+              <div className="mb-6">
+                <p className="text-sm text-gray-600 mb-3">
+                  Bạn có chắc chắn muốn xóa <strong>toàn bộ {metrics.length} metrics</strong> đã thu thập của pipeline{' '}
+                  <strong className="text-blue-600">{pipelineName}</strong>?
+                </p>
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                  <p className="text-sm text-red-700 font-medium mb-1">⚠️ Cảnh báo:</p>
+                  <p className="text-sm text-red-600">
+                    Hành động này không thể hoàn tác. Tất cả dữ liệu metrics lịch sử sẽ bị xóa vĩnh viễn khỏi database.
+                  </p>
+                </div>
+              </div>
+              
+              <div className="flex justify-end space-x-3">
+                <Button
+                  variant="secondary"
+                  onClick={() => setShowDeleteConfirm(false)}
+                  disabled={isDeleting}
+                >
+                  Hủy bỏ
+                </Button>
+                <Button
+                  variant="error"
+                  onClick={handleDeleteMetrics}
+                  disabled={isDeleting}
+                  className="flex items-center"
+                >
+                  {isDeleting ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      Đang xóa...
+                    </>
+                  ) : (
+                    <>
+                      <XCircle className="h-4 w-4 mr-2" />
+                      Xóa toàn bộ ({metrics.length})
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </Card>
+        </div>
       )}
     </div>
   );

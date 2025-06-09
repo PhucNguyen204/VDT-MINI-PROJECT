@@ -9,6 +9,8 @@ const sourceTypes = [
   { value: 'file', label: 'File System' },
   { value: 'http', label: 'HTTP Endpoint' },
   { value: 'prometheus_scrape', label: 'Prometheus Scrape' },
+  { value: 'docker_logs', label: 'Docker Logs' },
+  { value: 'syslog', label: 'Syslog' },
 ];
 
 export const SourceConfigStep: React.FC = () => {
@@ -230,6 +232,51 @@ export const SourceConfigStep: React.FC = () => {
               />
             </div>
           )}
+
+          {currentSource.source.type === 'docker_logs' && (
+            <div className="space-y-4">
+              <Input
+                label="Include Containers (comma-separated)"
+                type="text"
+                value={currentSource.source.include_containers?.join(', ') || ''}
+                onChange={(value) => handleConfigUpdate({ 
+                  include_containers: value.split(',').map(c => c.trim()).filter(Boolean)
+                })}
+                placeholder="container1, container2"
+              />
+              <Input
+                label="Exclude Containers (comma-separated)"
+                type="text"
+                value={currentSource.source.exclude_containers?.join(', ') || ''}
+                onChange={(value) => handleConfigUpdate({ 
+                  exclude_containers: value.split(',').map(c => c.trim()).filter(Boolean)
+                })}
+                placeholder="excluded1, excluded2"
+              />
+            </div>
+          )}
+
+          {currentSource.source.type === 'syslog' && (
+            <div className="space-y-4">
+              <Select
+                label="Mode"
+                value={currentSource.source.mode || 'tcp'}
+                onChange={(value) => handleConfigUpdate({ mode: value })}
+                options={[
+                  { value: 'tcp', label: 'TCP' },
+                  { value: 'udp', label: 'UDP' }
+                ]}
+              />
+              <Input
+                label="Address"
+                type="text"
+                value={currentSource.source.address || ''}
+                onChange={(value) => handleConfigUpdate({ address: value })}
+                placeholder="0.0.0.0:5514"
+                required
+              />
+            </div>
+          )}
         </div>
           {/* Transforms Configuration */}
         <div className="mt-6 pt-6 border-t border-gray-200">
@@ -293,32 +340,140 @@ export const SourceConfigStep: React.FC = () => {
                 </div>
                 
                 {sink.type === 's3' && (
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-3">
+                      <Input
+                        label="Bucket *"
+                        value={sink.config.bucket || ''}
+                        onChange={(value) => updateSink(index, { config: { ...sink.config, bucket: value } })}
+                        placeholder="phucnguyen204"
+                        required
+                      />
+                      <Input
+                        label="Region *"
+                        value={sink.config.region || ''}
+                        onChange={(value) => updateSink(index, { config: { ...sink.config, region: value } })}
+                        placeholder="ap-southeast-2"
+                        required
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <Input
+                        label="Access Key ID *"
+                        value={sink.config.access_key_id || ''}
+                        onChange={(value) => updateSink(index, { config: { ...sink.config, access_key_id: value } })}
+                        placeholder="AKIA5YG3CCI7MXG5KIE7"
+                        required
+                      />
+                      <Input
+                        label="Secret Access Key *"
+                        type="password"
+                        value={sink.config.secret_access_key || ''}
+                        onChange={(value) => updateSink(index, { config: { ...sink.config, secret_access_key: value } })}
+                        placeholder="Your secret key"
+                        required
+                      />
+                    </div>
+                    <div className="grid grid-cols-3 gap-3">
+                      <Input
+                        label="Key Prefix"
+                        value={sink.config.key_prefix || ''}
+                        onChange={(value) => updateSink(index, { config: { ...sink.config, key_prefix: value } })}
+                        placeholder="logs/%Y/%m/%d/"
+                      />
+                      <Select
+                        label="Compression"
+                        value={sink.config.compression || 'gzip'}
+                        onChange={(value) => updateSink(index, { config: { ...sink.config, compression: value } })}
+                        options={[
+                          { value: 'none', label: 'None' },
+                          { value: 'gzip', label: 'Gzip' },
+                          { value: 'lz4', label: 'LZ4' }
+                        ]}
+                      />
+                      <Select
+                        label="Format"
+                        value={sink.config.encoding || 'json'}
+                        onChange={(value) => updateSink(index, { config: { ...sink.config, encoding: value } })}
+                        options={[
+                          { value: 'json', label: 'JSON' },
+                          { value: 'text', label: 'Text' },
+                          { value: 'csv', label: 'CSV' }
+                        ]}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {sink.type === 'elasticsearch' && (
+                  <div className="space-y-4">
                     <Input
-                      label="Bucket"
-                      value={sink.config.bucket || ''}
-                      onChange={(value) => updateSink(index, { config: { ...sink.config, bucket: value } })}
-                      placeholder="my-bucket"
+                      label="Endpoints (comma-separated) *"
+                      value={sink.config.endpoints?.join(', ') || ''}
+                      onChange={(value) => updateSink(index, { 
+                        config: { 
+                          ...sink.config, 
+                          endpoints: value.split(',').map(e => e.trim()).filter(Boolean)
+                        } 
+                      })}
+                      placeholder="http://localhost:9200"
+                      required
                     />
-                    <Input
-                      label="Region"
-                      value={sink.config.region || ''}
-                      onChange={(value) => updateSink(index, { config: { ...sink.config, region: value } })}
-                      placeholder="us-west-2"
+                    <div className="grid grid-cols-2 gap-3">
+                      <Input
+                        label="Index"
+                        value={sink.config.index || ''}
+                        onChange={(value) => updateSink(index, { config: { ...sink.config, index: value } })}
+                        placeholder="logs-%Y.%m.%d"
+                      />
+                      <Input
+                        label="Doc Type"
+                        value={sink.config.doc_type || ''}
+                        onChange={(value) => updateSink(index, { config: { ...sink.config, doc_type: value } })}
+                        placeholder="_doc"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <Input
+                        label="Username"
+                        value={sink.config.username || ''}
+                        onChange={(value) => updateSink(index, { config: { ...sink.config, username: value } })}
+                        placeholder="elastic"
+                      />
+                      <Input
+                        label="Password"
+                        type="password"
+                        value={sink.config.password || ''}
+                        onChange={(value) => updateSink(index, { config: { ...sink.config, password: value } })}
+                        placeholder="password"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {sink.type === 'console' && (
+                  <div className="space-y-4">
+                    <Select
+                      label="Format"
+                      value={sink.config.encoding || 'json'}
+                      onChange={(value) => updateSink(index, { config: { ...sink.config, encoding: value } })}
+                      options={[
+                        { value: 'json', label: 'JSON' },
+                        { value: 'text', label: 'Text' },
+                        { value: 'csv', label: 'CSV' }
+                      ]}
                     />
-                    <Input
-                      label="Access Key ID"
-                      value={sink.config.access_key_id || ''}
-                      onChange={(value) => updateSink(index, { config: { ...sink.config, access_key_id: value } })}
-                      placeholder="AKIA..."
-                    />
-                    <Input
-                      label="Secret Access Key"
-                      type="password"
-                      value={sink.config.secret_access_key || ''}
-                      onChange={(value) => updateSink(index, { config: { ...sink.config, secret_access_key: value } })}
-                      placeholder="Secret key"
-                    />
+                    <label className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        checked={sink.config.pretty_print || false}
+                        onChange={(e) => updateSink(index, { 
+                          config: { ...sink.config, pretty_print: e.target.checked } 
+                        })}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="text-sm text-gray-700">Pretty Print</span>
+                    </label>
                   </div>
                 )}
               </div>

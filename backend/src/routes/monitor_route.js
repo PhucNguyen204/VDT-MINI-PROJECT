@@ -7,7 +7,8 @@ import {
   getCustomPipelineDashboard,
   getCustomPipelinesOverview,
   checkCustomPipelineHealth,
-  getMetricsCategories
+  getMetricsCategories,
+  deleteCustomPipelineMetrics
 } from '../controllers/monitor_controller.js';
 
 const router = express.Router();
@@ -29,6 +30,12 @@ router.post('/collect-all', collectAllCustomPipelineMetrics);
  * Lấy metrics lịch sử của một custom pipeline
  */
 router.get('/metrics/:id', getCustomPipelineMetrics);
+
+/**
+ * DELETE /api/custom-monitoring/metrics/:id
+ * Xóa toàn bộ metrics đã thu thập của một custom pipeline khỏi database
+ */
+router.delete('/metrics/:id', deleteCustomPipelineMetrics);
 
 /**
  * GET /api/custom-monitoring/dashboard/:id?timeRange=1h

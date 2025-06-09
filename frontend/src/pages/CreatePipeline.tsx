@@ -72,35 +72,49 @@ export const CreatePipeline: React.FC = () => {
 
       {/* Progress */}
       <Card className="p-6">
-        <div className="mb-4">
-          <div className="flex items-center justify-between mb-2">            <span className="text-sm font-medium text-gray-700">
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-sm font-medium text-gray-700">
               Step {currentStep + 1} of {steps.length}
             </span>
             <span className="text-sm text-gray-500">
               {Math.round(progress)}% complete
             </span>
           </div>
-          <Progress value={progress} className="h-2" />
+          <Progress value={progress} className="mb-6" />
         </div>
         
         <nav aria-label="Progress">
-          <ol className="flex items-center">
+          <ol className="flex items-center justify-between relative">
             {steps.map((step, stepIdx) => (
-              <li key={step.name} className={`relative ${stepIdx !== steps.length - 1 ? 'pr-8 sm:pr-20' : ''}`}>
-                <div className="absolute inset-0 flex items-center" aria-hidden="true">                  {stepIdx !== steps.length - 1 && (
-                    <div className={`h-0.5 w-full ${stepIdx <= currentStep ? 'bg-primary-600' : 'bg-gray-200'}`} />
-                  )}
-                </div>
-                <div className="relative flex h-8 w-8 items-center justify-center rounded-full border-2 bg-white">
+              <li key={step.name} className="flex flex-col items-center relative flex-1">
+                {/* Connector Line */}
+                {stepIdx !== steps.length - 1 && (
+                  <div 
+                    className={`absolute top-4 left-1/2 w-full h-0.5 -translate-y-1/2 ${
+                      stepIdx < currentStep ? 'bg-blue-600' : 'bg-gray-200'
+                    }`}
+                    style={{ left: '50%', right: '-50%', width: 'calc(100% - 16px)' }}
+                  />
+                )}
+                
+                {/* Step Circle */}
+                <div className={`
+                  relative z-10 flex h-8 w-8 items-center justify-center rounded-full border-2 bg-white
+                  ${stepIdx < currentStep ? 'border-blue-600 bg-blue-600' : 
+                    stepIdx === currentStep ? 'border-blue-600 bg-white' : 'border-gray-300 bg-white'}
+                `}>
                   {stepIdx < currentStep ? (
-                    <Check className="h-5 w-5 text-primary-600" />
+                    <Check className="h-4 w-4 text-white" />
                   ) : stepIdx === currentStep ? (
-                    <span className="h-2.5 w-2.5 rounded-full bg-primary-600" />
+                    <span className="h-2.5 w-2.5 rounded-full bg-blue-600" />
                   ) : (
-                    <span className="h-2.5 w-2.5 rounded-full bg-transparent border-2 border-gray-300" />
+                    <span className="h-2.5 w-2.5 rounded-full bg-gray-300" />
                   )}
                 </div>
-                <span className="absolute -bottom-6 left-1/2 transform -translate-x-1/2 text-xs text-gray-500 whitespace-nowrap">
+                
+                {/* Step Label */}
+                <span className="mt-3 text-xs font-medium text-gray-600 text-center max-w-24">
                   {step.name}
                 </span>
               </li>

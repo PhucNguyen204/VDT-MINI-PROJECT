@@ -49,7 +49,7 @@ export const pipelineApi = {  // Create pipeline
     // Transform data to match Custom Pipeline API format
     const sources: Record<string, any> = {};
     const transforms: Record<string, string[]> = {};
-    const sinks: Record<string, string[]> = {};
+    const sinks: Record<string, any[]> = {};
     
     // Transform sources
     for (const [sourceId, sourceConfigData] of Object.entries(data.sources)) {
@@ -75,17 +75,32 @@ export const pipelineApi = {  // Create pipeline
             scrape_interval_secs: sourceConfig.scrape_interval || 15,
           };
           break;
+        case 'docker_logs':
+          sources[sourceId] = {
+            type: 'docker_logs',
+            include_containers: sourceConfig.include_containers || [],
+            exclude_containers: sourceConfig.exclude_containers || [],
+          };
+          break;
+        case 'syslog':
+          sources[sourceId] = {
+            type: 'syslog',
+            mode: sourceConfig.mode || 'tcp',
+            address: sourceConfig.address || '0.0.0.0:5514',
+          };
+          break;
         default:
           throw new Error(`Unsupported source type: ${sourceConfig.type}`);
       }
       
       // Set transforms and sinks for this source
       transforms[sourceId] = sourceConfigData.transforms || [];
-      sinks[sourceId] = sourceConfigData.sinks.map(sink => sink.type) || [];
+      sinks[sourceId] = sourceConfigData.sinks || []; // Keep full sink objects with config
     }
     
     const transformedData = {
       name: data.name,
+      description: data.description,
       sources,
       transforms,
       sinks
@@ -470,6 +485,12 @@ export const metricsApi = {
   // Get available metrics categories
   getCategories: async (): Promise<any> => {
     const response = await api.get('/custom-monitoring/metrics-categories');
+    return response.data;
+  },
+
+  // Delete all metrics for a pipeline
+  deleteMetrics: async (pipelineId: string): Promise<any> => {
+    const response = await api.delete(`/custom-monitoring/metrics/${pipelineId}`);
     return response.data;
   }
 };
