@@ -3,7 +3,8 @@
 import { execSync, exec } from 'child_process';
 import { promisify } from 'util';
 import fs from 'fs';
-import { db } from '../configs/db.js';
+import { pipelineRepository, logsRepository } from '../repositories/index.js';
+import { serviceLogger, dockerLogger, pipelineLogger } from '../configs/logger.js';
 
 const execAsync = promisify(exec);
 
@@ -13,24 +14,23 @@ const execAsync = promisify(exec);
  * @returns {Promise<Object>} Kết quả của việc stop
  */
 export async function stopCustomPipeline(pipelineId) {
-  const client = await db.connect();
+  const startTime = Date.now();
+  serviceLogger.info('Starting pipeline stop operation', { pipelineId });
   
   try {
     // Lấy thông tin pipeline từ database
-    const pipelineQuery = `
-      SELECT id, name, container_id, status, config_path
-      FROM custom_pipelines 
-      WHERE id = $1 AND deleted = false
-    `;
-    const result = await client.query(pipelineQuery, [pipelineId]);
+    const pipeline = await pipelineRepository.findById(pipelineId);
     
-    if (result.rows.length === 0) {
+    if (!pipeline) {
+      serviceLogger.warn('Pipeline not found for stop operation', { pipelineId });
       throw new Error(`Custom pipeline with ID ${pipelineId} not found`);
     }
     
-    const pipeline = result.rows[0];
-    
     if (pipeline.status === 'stopped') {
+      serviceLogger.info('Pipeline already stopped', { 
+        pipelineId, 
+        pipelineName: pipeline.name 
+      });
       return {
         success: true,
         message: 'Pipeline is already stopped',
@@ -38,32 +38,52 @@ export async function stopCustomPipeline(pipelineId) {
       };
     }
     
-    console.log(`[Custom Pipeline Manage] Stopping pipeline: ${pipeline.name}`);
+    pipelineLogger.info('Stopping pipeline', { 
+      pipelineId, 
+      pipelineName: pipeline.name,
+      currentStatus: pipeline.status
+    });
     
     // Stop Docker container (không remove)
     const containerName = pipeline.container_id || `custom_pipeline_${pipelineId}`;
     try {
-      console.log(`[Custom Pipeline Manage] Stopping container: ${containerName}`);
+      dockerLogger.info('Stopping Docker container', { 
+        containerName, 
+        pipelineId 
+      });
       execSync(`docker stop ${containerName}`, { stdio: 'pipe' });
+      dockerLogger.info('Docker container stopped successfully', { 
+        containerName, 
+        pipelineId 
+      });
     } catch (dockerError) {
-      console.warn(`[Custom Pipeline Manage] Docker stop warning: ${dockerError.message}`);
+      dockerLogger.warn('Docker stop warning', { 
+        containerName, 
+        pipelineId,
+        error: dockerError.message
+      });
     }
     
     // Update database status
-    const updateQuery = `
-      UPDATE custom_pipelines 
-      SET status = 'stopped', stopped_at = NOW()
-      WHERE id = $1
-      RETURNING *
-    `;
-    
-    const updateResult = await client.query(updateQuery, [pipelineId]);
-    const updatedPipeline = updateResult.rows[0];
+    const updatedPipeline = await pipelineRepository.update(pipelineId, {
+      status: 'stopped',
+      stopped_at: new Date()
+    });
     
     // Log action
-    await logAction(client, pipelineId, 'stop', 'Pipeline stopped successfully');
+    await logsRepository.create({
+      pipeline_id: pipelineId,
+      log_level: 'INFO',
+      action: 'stop',
+      message: 'Pipeline stopped successfully'
+    });
     
-    console.log(`[Custom Pipeline Manage] Pipeline ${pipeline.name} stopped successfully`);
+    const duration = Date.now() - startTime;
+    pipelineLogger.info('Pipeline stopped successfully', { 
+      pipelineId, 
+      pipelineName: pipeline.name,
+      duration: `${duration}ms`
+    });
     
     return {
       success: true,
@@ -72,11 +92,20 @@ export async function stopCustomPipeline(pipelineId) {
     };
     
   } catch (error) {
-    console.error('[Custom Pipeline Manage] Error stopping pipeline:', error);
-    await logAction(client, pipelineId, 'stop', `Error: ${error.message}`);
+    const duration = Date.now() - startTime;
+    serviceLogger.error('Pipeline stop operation failed', {
+      pipelineId,
+      error: error.message,
+      duration: `${duration}ms`
+    });
+    
+    await logsRepository.create({
+      pipeline_id: pipelineId,
+      log_level: 'ERROR',
+      action: 'stop',
+      message: `Error: ${error.message}`
+    });
     throw error;
-  } finally {
-    client.release();
   }
 }
 
@@ -86,22 +115,13 @@ export async function stopCustomPipeline(pipelineId) {
  * @returns {Promise<Object>} Kết quả của việc restart
  */
 export async function restartCustomPipeline(pipelineId) {
-  const client = await db.connect();
-  
   try {
     // Lấy thông tin pipeline
-    const pipelineQuery = `
-      SELECT id, name, container_id, config_path, exposed_ports, status
-      FROM custom_pipelines 
-      WHERE id = $1 AND deleted = false
-    `;
-    const result = await client.query(pipelineQuery, [pipelineId]);
+    const pipeline = await pipelineRepository.findById(pipelineId);
     
-    if (result.rows.length === 0) {
+    if (!pipeline) {
       throw new Error(`Custom pipeline with ID ${pipelineId} not found`);
     }
-    
-    const pipeline = result.rows[0];
     
     // Check if pipeline is already running
     if (pipeline.status === 'running') {
@@ -164,7 +184,7 @@ export async function restartCustomPipeline(pipelineId) {
           '-v', '/var/run/docker.sock:/var/run/docker.sock:ro'
         ];
 
-        // Add port mappings for exposed_ports (JSONB - already parsed)
+        // Add port mappings for exposed_ports (already parsed from JSON)
         const exposedPorts = pipeline.exposed_ports || [];
         if (Array.isArray(exposedPorts) && exposedPorts.length > 0) {
           exposedPorts.forEach(portConfig => {
@@ -192,18 +212,19 @@ export async function restartCustomPipeline(pipelineId) {
       }
       
       // Update database status
-      const updateQuery = `
-        UPDATE custom_pipelines 
-        SET status = 'running', started_at = NOW(), container_id = $2
-        WHERE id = $1
-        RETURNING *
-      `;
-      
-      const updateResult = await client.query(updateQuery, [pipelineId, containerId]);
-      const updatedPipeline = updateResult.rows[0];
+      const updatedPipeline = await pipelineRepository.update(pipelineId, {
+        status: 'running',
+        started_at: new Date(),
+        container_id: containerId
+      });
       
       // Log action
-      await logAction(client, pipelineId, 'restart', 'Pipeline restarted successfully');
+      await logsRepository.create({
+        pipeline_id: pipelineId,
+        log_level: 'INFO',
+        action: 'restart',
+        message: 'Pipeline restarted successfully'
+      });
       
       console.log(`[Custom Pipeline Manage] Pipeline ${pipeline.name} restarted successfully`);
       
@@ -221,10 +242,13 @@ export async function restartCustomPipeline(pipelineId) {
     
   } catch (error) {
     console.error('[Custom Pipeline Manage] Error restarting pipeline:', error);
-    await logAction(client, pipelineId, 'restart', `Error: ${error.message}`);
+    await logsRepository.create({
+      pipeline_id: pipelineId,
+      log_level: 'ERROR',
+      action: 'restart',
+      message: `Error: ${error.message}`
+    });
     throw error;
-  } finally {
-    client.release();
   }
 }
 
@@ -234,22 +258,14 @@ export async function restartCustomPipeline(pipelineId) {
  * @returns {Promise<Object>} Kết quả của việc xóa
  */
 export async function deleteCustomPipeline(pipelineId) {
-  const client = await db.connect();
-  
   try {
     // Lấy thông tin pipeline
-    const pipelineQuery = `
-      SELECT id, name, container_id, config_path
-      FROM custom_pipelines 
-      WHERE id = $1 AND deleted = false
-    `;
-    const result = await client.query(pipelineQuery, [pipelineId]);
+    const pipeline = await pipelineRepository.findById(pipelineId);
     
-    if (result.rows.length === 0) {
+    if (!pipeline) {
       throw new Error(`Custom pipeline with ID ${pipelineId} not found`);
     }
     
-    const pipeline = result.rows[0];
     const containerName = pipeline.container_id || `custom_pipeline_${pipelineId}`;
     
     console.log(`[Custom Pipeline Manage] Deleting pipeline: ${pipeline.name}`);
@@ -278,19 +294,22 @@ export async function deleteCustomPipeline(pipelineId) {
         console.warn(`[Custom Pipeline Manage] Could not remove config file: ${fileError.message}`);
       }
     }
-      // Update database - soft delete
-    const deleteQuery = `
-      UPDATE custom_pipelines 
-      SET deleted = true, status = 'stopped', stopped_at = NOW(), active = false
-      WHERE id = $1
-      RETURNING *
-    `;
     
-    const deleteResult = await client.query(deleteQuery, [pipelineId]);
-    const deletedPipeline = deleteResult.rows[0];
+    // Update database - soft delete
+    const deletedPipeline = await pipelineRepository.update(pipelineId, {
+      deleted: true,
+      status: 'stopped',
+      stopped_at: new Date(),
+      active: false
+    });
     
     // Log action
-    await logAction(client, pipelineId, 'delete', 'Pipeline deleted successfully');
+    await logsRepository.create({
+      pipeline_id: pipelineId,
+      log_level: 'INFO',
+      action: 'delete',
+      message: 'Pipeline deleted successfully'
+    });
     
     console.log(`[Custom Pipeline Manage] Pipeline ${pipeline.name} deleted successfully`);
     
@@ -302,10 +321,13 @@ export async function deleteCustomPipeline(pipelineId) {
     
   } catch (error) {
     console.error('[Custom Pipeline Manage] Error deleting pipeline:', error);
-    await logAction(client, pipelineId, 'delete', `Error: ${error.message}`);
+    await logsRepository.create({
+      pipeline_id: pipelineId,
+      log_level: 'ERROR',
+      action: 'delete',
+      message: `Error: ${error.message}`
+    });
     throw error;
-  } finally {
-    client.release();
   }
 }
 
@@ -315,21 +337,12 @@ export async function deleteCustomPipeline(pipelineId) {
  * @returns {Promise<Object>} Thông tin status của pipeline
  */
 export async function getCustomPipelineStatus(pipelineId) {
-  const client = await db.connect();
-  
   try {
-    const query = `
-      SELECT * FROM custom_pipelines 
-      WHERE id = $1 AND deleted = false
-    `;
+    const pipeline = await pipelineRepository.findById(pipelineId);
     
-    const result = await client.query(query, [pipelineId]);
-    
-    if (result.rows.length === 0) {
+    if (!pipeline) {
       throw new Error(`Custom pipeline with ID ${pipelineId} not found`);
     }
-    
-    const pipeline = result.rows[0];
     
     // Check container status
     let containerRunning = false;
@@ -351,8 +364,9 @@ export async function getCustomPipelineStatus(pipelineId) {
       container_status: containerRunning ? 'running' : 'stopped'
     };
     
-  } finally {
-    client.release();
+  } catch (error) {
+    console.error('[Custom Pipeline Manage] Error getting pipeline status:', error);
+    throw error;
   }
 }
 
@@ -361,40 +375,26 @@ export async function getCustomPipelineStatus(pipelineId) {
  * @returns {Promise<Array>} Danh sách tất cả custom pipelines
  */
 export async function getAllCustomPipelines() {
-  const client = await db.connect();
-  
   try {
-    const query = `
-      SELECT id, name, description, status, created_at, started_at, stopped_at
-      FROM custom_pipelines 
-      WHERE deleted = false
-      ORDER BY created_at DESC
-    `;
+    const pipelines = await pipelineRepository.findAll({}, {
+      orderBy: 'created_at'
+    });
     
-    const result = await client.query(query);
-    return result.rows;
+    // Filter only required fields to match original API
+    return pipelines.map(pipeline => ({
+      id: pipeline.id,
+      name: pipeline.name,
+      description: pipeline.description,
+      status: pipeline.status,
+      created_at: pipeline.created_at,
+      started_at: pipeline.started_at,
+      stopped_at: pipeline.stopped_at
+    }));
     
-  } finally {
-    client.release();
+  } catch (error) {
+    console.error('[Custom Pipeline Manage] Error getting all pipelines:', error);
+    throw error;
   }
 }
 
-/**
- * Log action vào custom_pipeline_logs table
- * @param {Object} client - Database client
- * @param {string} pipelineId - ID của pipeline
- * @param {string} action - Action được thực hiện
- * @param {string} message - Message mô tả
- */
-async function logAction(client, pipelineId, action, message) {
-  try {
-    const logQuery = `
-      INSERT INTO custom_pipeline_logs (pipeline_id, log_level, action, message, created_at)
-      VALUES ($1, $2, $3, $4, NOW())
-    `;
-    await client.query(logQuery, [pipelineId, 'INFO', action, message]);
-  } catch (error) {
-    console.error('[Custom Pipeline Manage] Error logging action:', error);
-    // Không throw error để không ảnh hưởng đến main operation
-  }
-}
+

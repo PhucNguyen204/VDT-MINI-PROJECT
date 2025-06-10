@@ -1,5 +1,5 @@
 // Custom Pipeline Scheduler Controller
-import { customScheduler } from '../services/scheduler.service.js';
+import { customScheduler } from '../services/scheduler_service.js';
 
 /**
  * Controller for automated metrics collection scheduling

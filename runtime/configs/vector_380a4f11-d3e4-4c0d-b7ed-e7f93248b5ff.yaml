@@ -1,0 +1,59 @@
+data_dir: /var/lib/vector
+api:
+  enabled: true
+  address: 0.0.0.0:8686
+  playground: true
+telemetry:
+  metrics:
+    enabled: true
+sources:
+  file_source:
+    type: file
+    include:
+      - /runtime/logs/*.log
+    exclude: []
+    ignore_older_secs: 86400
+    max_read_bytes: 2048
+    read_from: beginning
+    fingerprint:
+      strategy: checksum
+      ignored_header_bytes: 0
+transforms:
+  file_source_parse_0:
+    type: remap
+    inputs:
+      - file_source
+    source: |
+      # Thử parse JSON, nếu thành công thì merge, nếu không thì giữ nguyên
+      parsed, err = parse_json(.message)
+      if err == null {
+        . = merge!(., parsed)
+      }
+      # Đảm bảo có timestamp
+      if !exists(.timestamp) {
+        .timestamp = now()
+      }
+  file_source_enrich_1:
+    type: remap
+    inputs:
+      - file_source_parse_0
+    source: |
+      .pipeline = "test-repo-pipeline"
+      if !exists(.source_type) {
+        .source_type = "file_source"
+      }
+      # Thêm cluster info nếu có
+      if !is_empty("${CLUSTER_ID-}") {
+        .cluster_id = "${CLUSTER_ID-}"
+      }
+      # Thêm environment info
+      if !is_empty("${ENVIRONMENT-}") {
+        .environment = "${ENVIRONMENT-}"
+      }
+sinks:
+  file_source_console_0:
+    type: console
+    inputs:
+      - file_source_enrich_1
+    encoding:
+      codec: json

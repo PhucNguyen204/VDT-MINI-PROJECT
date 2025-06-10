@@ -18,6 +18,8 @@
     "js-yaml": "^4.1.0",
     "node-fetch": "^3.3.2",
     "pg": "^8.16.0",
-    "uuid": "^9.0.0"
+    "uuid": "^9.0.0",
+    "winston": "^3.17.0",
+    "winston-daily-rotate-file": "^5.0.0"
   }
 }

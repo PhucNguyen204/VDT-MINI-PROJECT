@@ -7,114 +7,45 @@ import { spawnSync } from 'child_process';
 import { v4 as uuidv4 } from 'uuid';
 import { fileURLToPath } from 'url';
 import { db } from '../configs/db.js';
+import { pipelineRepository, logsRepository } from '../repositories/index.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rel = p => path.join(__dirname, p);
 const RUNTIME_DIR = '/runtime/configs';
 
 /*═══════════════════════════════════════════════════════*/
-/* Database Operations                                   */
+/* Database Operations (Using Repository Pattern)        */
 /*═══════════════════════════════════════════════════════*/
 
 async function savePipelineToDatabase(pipelineData) {
-  const query = `
-    INSERT INTO custom_pipelines (
-      id, name, description, sources_config, transforms_config, sinks_config,
-      container_id, config_path, exposed_ports, status, started_at
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-    RETURNING *
-  `;
+  // Set default status and timestamps
+  const dataWithDefaults = {
+    ...pipelineData,
+    status: 'running',
+    started_at: new Date()
+  };
   
-  const values = [
-    pipelineData.id,
-    pipelineData.name,
-    pipelineData.description || null,
-    JSON.stringify(pipelineData.sources_config),
-    JSON.stringify(pipelineData.transforms_config),
-    JSON.stringify(pipelineData.sinks_config),
-    pipelineData.container_id,
-    pipelineData.config_path,
-    JSON.stringify(pipelineData.exposed_ports || []),
-    'running',
-    new Date()
-  ];
-  
-  const result = await db.query(query, values);
-  return result.rows[0];
+  return await pipelineRepository.create(dataWithDefaults);
 }
 
 async function getPipelinesFromDatabase() {
-  const query = `
-    SELECT * FROM custom_pipelines 
-    WHERE deleted = false 
-    ORDER BY created_at DESC
-  `;
-  
-  const result = await db.query(query);
-  return result.rows.map(row => ({
-    ...row,
-    sources_config: row.sources_config,
-    transforms_config: row.transforms_config,
-    sinks_config: row.sinks_config,
-    exposed_ports: row.exposed_ports
-  }));
+  return await pipelineRepository.findAll();
 }
 
 async function getPipelineFromDatabase(id) {
-  const query = `
-    SELECT * FROM custom_pipelines 
-    WHERE id = $1 AND deleted = false
-  `;
-  
-  const result = await db.query(query, [id]);
-  if (result.rows.length === 0) return null;
-  
-  const row = result.rows[0];
-  return {
-    ...row,
-    sources_config: row.sources_config,
-    transforms_config: row.transforms_config,
-    sinks_config: row.sinks_config,
-    exposed_ports: row.exposed_ports
-  };
+  return await pipelineRepository.findById(id);
 }
 
 async function updatePipelineStatus(id, status, errorMessage = null) {
-  const query = `
-    UPDATE custom_pipelines 
-    SET status = $1, error_message = $2, updated_at = now()
-    ${status === 'stopped' ? ', stopped_at = now()' : ''}
-    WHERE id = $3
-    RETURNING *
-  `;
-  
-  const values = [status, errorMessage, id];
-  const result = await db.query(query, values);
-  return result.rows[0];
+  return await pipelineRepository.updateStatus(id, status, errorMessage);
 }
 
 async function deletePipelineFromDatabase(id) {
-  const query = `
-    UPDATE custom_pipelines 
-    SET deleted = true, active = false, updated_at = now()
-    WHERE id = $1
-    RETURNING *
-  `;
-  
-  const result = await db.query(query, [id]);
-  return result.rows[0];
+  return await pipelineRepository.softDelete(id);
 }
 
 async function logPipelineAction(pipelineId, action, message, metadata = {}) {
-  const query = `
-    INSERT INTO custom_pipeline_logs (pipeline_id, log_level, action, message, metadata)
-    VALUES ($1, $2, $3, $4, $5)
-    RETURNING *
-  `;
-  
-  const values = [pipelineId, 'INFO', action, message, JSON.stringify(metadata)];
-  const result = await db.query(query, values);
-  return result.rows[0];
+  return await logsRepository.logAction(pipelineId, action, message, 'INFO', metadata);
 }
 
 /*═══════════════════════════════════════════════════════*/
