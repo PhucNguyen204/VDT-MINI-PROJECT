@@ -1,5 +1,5 @@
 // custom_monitor.controller.js
-import { customMonitorService } from '../services/custom_monitor.service.js';
+import { customMonitorService } from '../services/monitor_service.js';
 
 /**
  * POST /api/custom-monitoring/collect/:id
@@ -233,7 +233,7 @@ export async function checkCustomPipelineHealth(req, res) {
         message: 'Custom pipeline ID is required'
       });
     }    // Get health check from service
-    const { CustomVectorMetricsCollector } = await import('../services/custom_monitor.service.js');
+    const { CustomVectorMetricsCollector } = await import('../services/monitor_service.js');
     const metricsCollector = new CustomVectorMetricsCollector();
     const healthCheck = await metricsCollector.getHealthStatus(id);
     

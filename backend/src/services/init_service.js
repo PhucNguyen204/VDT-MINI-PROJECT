@@ -107,12 +107,12 @@ async function deletePipelineFromDatabase(id) {
 
 async function logPipelineAction(pipelineId, action, message, metadata = {}) {
   const query = `
-    INSERT INTO custom_pipeline_logs (pipeline_id, action, message, metadata)
-    VALUES ($1, $2, $3, $4)
+    INSERT INTO custom_pipeline_logs (pipeline_id, log_level, action, message, metadata)
+    VALUES ($1, $2, $3, $4, $5)
     RETURNING *
   `;
   
-  const values = [pipelineId, action, message, JSON.stringify(metadata)];
+  const values = [pipelineId, 'INFO', action, message, JSON.stringify(metadata)];
   const result = await db.query(query, values);
   return result.rows[0];
 }

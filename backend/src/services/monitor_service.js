@@ -727,51 +727,107 @@ export class CustomMonitorService {
     const metrics = [];
     
     try {
-      // Format: "0.00%	1.5MiB / 7.777GiB	1.79MiB / 0B	0B / 0B"
-      const parts = statsLine.split('\t');
+      // Format: "0.23%     153MiB / 7.616GiB   19.7kB / 9.92kB   0B / 0B"
+      // Split by multiple spaces to handle varying spacing
+      const parts = statsLine.trim().split(/\s+/);
+      console.log('🔍 [Container Stats] Raw line:', statsLine);
+      console.log('🔍 [Container Stats] Parsed parts:', parts);
       
       if (parts.length >= 4) {
-        // CPU Usage
+        // CPU Usage - parts[0]
         const cpuMatch = parts[0].match(/([0-9.]+)%/);
         if (cpuMatch) {
+          const cpuValue = parseFloat(cpuMatch[1]);
           metrics.push({
             metric_type: 'resource',
-            metric_name: 'container_cpu_percent',
-            metric_value: parseFloat(cpuMatch[1]),
+            metric_name: 'cpu_usage_percent',
+            metric_value: cpuValue,
             unit: 'percent'
           });
+          console.log('✅ [Container Stats] CPU:', cpuValue + '%');
         }
         
-        // Memory Usage
-        const memMatch = parts[1].match(/([0-9.]+[KMGT]?iB)/);
-        if (memMatch) {
+        // Memory Usage - parts[1] format: "153MiB" and parts[3] format: "7.616GiB"
+        const memUsedMatch = parts[1].match(/([0-9.]+[KMGT]?iB)/);
+        if (memUsedMatch) {
+          const memUsedBytes = this.parseSize(memUsedMatch[1]);
           metrics.push({
             metric_type: 'resource',
-            metric_name: 'container_memory_usage',
-            metric_value: this.parseSize(memMatch[1]),
+            metric_name: 'memory_usage',
+            metric_value: memUsedBytes,
             unit: 'bytes'
           });
+          console.log('✅ [Container Stats] Memory used:', memUsedBytes, 'bytes');
+          
+          // Calculate memory percentage if limit is available
+          if (parts.length > 3) {
+            const memLimitMatch = parts[3].match(/([0-9.]+[KMGT]?iB)/);
+            if (memLimitMatch) {
+              const memLimitBytes = this.parseSize(memLimitMatch[1]);
+              const memPercent = (memUsedBytes / memLimitBytes) * 100;
+              metrics.push({
+                metric_type: 'resource',
+                metric_name: 'memory_usage_percent',
+                metric_value: memPercent,
+                unit: 'percent'
+              });
+              console.log('✅ [Container Stats] Memory percent:', memPercent.toFixed(2) + '%');
+            }
+          }
         }
         
-        // Network I/O
-        const netMatch = parts[2].match(/([0-9.]+[KMGT]?iB)\s*\/\s*([0-9.]+[KMGT]?iB)/);
-        if (netMatch) {
-          metrics.push({
-            metric_type: 'resource',
-            metric_name: 'container_network_rx',
-            metric_value: this.parseSize(netMatch[1]),
-            unit: 'bytes'
-          });
-          metrics.push({
-            metric_type: 'resource',
-            metric_name: 'container_network_tx',
-            metric_value: this.parseSize(netMatch[2]),
-            unit: 'bytes'
-          });
+        // Network I/O - Find pattern like "19.7kB / 9.92kB"
+        const networkPart = parts.find(part => part.includes('/') && (part.includes('B') || part.includes('iB')));
+        if (networkPart) {
+          const netMatch = networkPart.match(/([0-9.]+[KMGT]?B)\s*\/\s*([0-9.]+[KMGT]?B)/);
+          if (netMatch) {
+            const networkRx = this.parseSize(netMatch[1]);
+            const networkTx = this.parseSize(netMatch[2]);
+            
+            metrics.push({
+              metric_type: 'resource',
+              metric_name: 'network_rx',
+              metric_value: networkRx,
+              unit: 'bytes'
+            });
+            metrics.push({
+              metric_type: 'resource',
+              metric_name: 'network_tx',
+              metric_value: networkTx,
+              unit: 'bytes'
+            });
+            console.log('✅ [Container Stats] Network RX:', networkRx, 'TX:', networkTx, 'bytes');
+          }
+        }
+        
+        // Block I/O - Usually the last part "0B / 0B"
+        const blockPart = parts[parts.length - 1];
+        if (blockPart && blockPart.includes('/')) {
+          const blockMatch = blockPart.match(/([0-9.]+[KMGT]?B)\s*\/\s*([0-9.]+[KMGT]?B)/);
+          if (blockMatch) {
+            const blockRead = this.parseSize(blockMatch[1]);
+            const blockWrite = this.parseSize(blockMatch[2]);
+            
+            metrics.push({
+              metric_type: 'resource',
+              metric_name: 'block_read',
+              metric_value: blockRead,
+              unit: 'bytes'
+            });
+            metrics.push({
+              metric_type: 'resource',
+              metric_name: 'block_write',
+              metric_value: blockWrite,
+              unit: 'bytes'
+            });
+            console.log('✅ [Container Stats] Block Read:', blockRead, 'Write:', blockWrite, 'bytes');
+          }
         }
       }
+      
+      console.log(`✅ [Container Stats] Parsed ${metrics.length} metrics from stats`);
     } catch (error) {
-      console.error('Error parsing container stats:', error);
+      console.error('❌ [Container Stats] Error parsing:', error);
     }
     
     return metrics;
@@ -901,6 +957,65 @@ export class CustomMonitorService {
   }
 
   /**
+   * Delete all metrics for a custom pipeline
+   */
+  async deleteCustomPipelineMetrics(pipelineId) {
+    const client = await db.connect();
+    
+    try {
+      // Verify pipeline exists
+      const pipelineResult = await client.query(
+        'SELECT id, name FROM custom_pipelines WHERE id = $1 AND deleted = false',
+        [pipelineId]
+      );
+      
+      if (pipelineResult.rows.length === 0) {
+        return {
+          success: false,
+          message: 'Custom pipeline not found'
+        };
+      }
+
+      const pipeline = pipelineResult.rows[0];
+      
+      // First, count how many will be deleted
+      const countResult = await client.query(
+        'SELECT COUNT(*) FROM pipeline_metrics WHERE pipeline_id = $1',
+        [pipelineId]
+      );
+      const metricsToDelete = parseInt(countResult.rows[0].count);
+      
+      // Execute delete all metrics for this pipeline
+      const deleteResult = await client.query(
+        'DELETE FROM pipeline_metrics WHERE pipeline_id = $1',
+        [pipelineId]
+      );
+      const deletedCount = deleteResult.rowCount;
+      
+      console.log(`🗑️ [Custom Monitor] Deleted ${deletedCount} metrics for pipeline ${pipeline.name}`);
+      
+      return {
+        success: true,
+        pipeline_id: pipelineId,
+        pipeline_name: pipeline.name,
+        metrics_deleted: deletedCount,
+        message: `Deleted all ${deletedCount} metrics from database`,
+        timestamp: new Date().toISOString()
+      };
+      
+    } catch (error) {
+      console.error('Error deleting custom pipeline metrics:', error);
+      return {
+        success: false,
+        pipeline_id: pipelineId,
+        error: error.message
+      };
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
    * Helper: Parse size string to bytes
    */
   parseSize(sizeStr) {
@@ -926,7 +1041,3 @@ export const customMonitorService = new CustomMonitorService();
 
 // Export class for direct usage
 export { CustomVectorMetricsCollector };
-
-
-
-

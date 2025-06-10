@@ -389,10 +389,10 @@ export async function getAllCustomPipelines() {
 async function logAction(client, pipelineId, action, message) {
   try {
     const logQuery = `
-      INSERT INTO custom_pipeline_logs (pipeline_id, action, message, created_at)
-      VALUES ($1, $2, $3, NOW())
+      INSERT INTO custom_pipeline_logs (pipeline_id, log_level, action, message, created_at)
+      VALUES ($1, $2, $3, $4, NOW())
     `;
-    await client.query(logQuery, [pipelineId, action, message]);
+    await client.query(logQuery, [pipelineId, 'INFO', action, message]);
   } catch (error) {
     console.error('[Custom Pipeline Manage] Error logging action:', error);
     // Không throw error để không ảnh hưởng đến main operation

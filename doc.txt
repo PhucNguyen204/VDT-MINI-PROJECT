@@ -72,7 +72,7 @@ Invoke-RestMethod -Uri "http://localhost:3000/api/multi-pipelines/2b6f429d-fcfc-
 
 
 $body = @{
-    name = "dual-source-pipeline"
+    name = "demo1"
     sources = @{
         file_source = @{
             type = "file"
