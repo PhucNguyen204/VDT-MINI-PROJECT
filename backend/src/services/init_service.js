@@ -4,14 +4,44 @@ import fs from 'fs';
 import path from 'path';
 import yaml from 'js-yaml';
 import { spawnSync } from 'child_process';
+import { promisify } from 'util';
+import { exec } from 'child_process';
 import { v4 as uuidv4 } from 'uuid';
 import { fileURLToPath } from 'url';
 import { db } from '../configs/db.js';
 import { pipelineRepository, logsRepository } from '../repositories/index.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const rel = p => path.join(__dirname, p);
-const RUNTIME_DIR = '/runtime/configs';
+const execAsync = promisify(exec);
+
+// Helper function for relative paths
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const rel = (relativePath) => path.resolve(__dirname, relativePath);
+
+// Runtime directory for Vector configurations
+const RUNTIME_DIR = path.resolve(__dirname, '../../../runtime/configs');
+
+/*═══════════════════════════════════════════════════════*/
+/* Vector API Port Management                            */
+/*═══════════════════════════════════════════════════════*/
+
+/**
+ * Get Vector API port based on number of existing pipelines
+ * @returns {Promise<number>} Vector API port (8686 + pipeline count)
+ */
+async function getVectorApiPort() {
+  try {
+    const pipelines = await getPipelinesFromDatabase();
+    const pipelineCount = pipelines.length;
+    const vectorApiPort = 8686 + pipelineCount;
+    
+    console.log(`[Custom Pipeline] Assigning Vector API port: ${vectorApiPort} (base: 8686 + pipeline count: ${pipelineCount})`);
+    return vectorApiPort;
+  } catch (error) {
+    console.error('[Custom Pipeline] Error getting pipeline count, using default port 8686:', error);
+    return 8686;
+  }
+}
 
 /*═══════════════════════════════════════════════════════*/
 /* Database Operations (Using Repository Pattern)        */
@@ -65,16 +95,14 @@ function buildSources(sourcesSpec) {
   
   for (const [sourceId, sourceConfig] of Object.entries(sourcesSpec)) {
     switch (sourceConfig.type) {
-      case 'http':
-        sources[sourceId] = {
+      case 'http':        sources[sourceId] = {
           type: 'http_server',
           address: `0.0.0.0:${sourceConfig.listen_port || 8088}`
         };
         break;
         
       case 'file':
-        sources[sourceId] = {
-          type: 'file',
+        sources[sourceId] = {          type: 'file',
           include: sourceConfig.include || [],
           exclude: sourceConfig.exclude || [],
           ignore_older_secs: sourceConfig.ignore_older_secs || 86400,
@@ -345,8 +373,7 @@ export async function createCustomPipeline(spec) {
       '--volumes-from', 'demo_vdt_api',
       '-v', '/var/run/docker.sock:/var/run/docker.sock:ro'
     ];
-    
-    // Add port mappings for HTTP and Syslog sources
+      // Add port mappings for HTTP and Syslog sources
     for (const [sourceId, sourceConfig] of Object.entries(spec.sources)) {
       if (sourceConfig.type === 'http') {
         const port = sourceConfig.listen_port || 8088;
@@ -359,7 +386,12 @@ export async function createCustomPipeline(spec) {
         exposedPorts.push({ source: sourceId, type: 'syslog', port: parseInt(port) });
         console.log(`[Custom Pipeline] Exposing Syslog port: ${port} for source: ${sourceId}`);
       }
-    }
+    }    // Get Vector API port based on pipeline count
+    const vectorApiPort = await getVectorApiPort();
+    
+    dockerArgs.push('-p', `${vectorApiPort}:8686`);
+    exposedPorts.push({ source: 'vector_api', type: 'api', port: vectorApiPort });
+    console.log(`[Custom Pipeline] Exposing Vector API port: ${vectorApiPort} for metrics collection`);
     
     dockerArgs.push(
       'timberio/vector:0.47.0-debian',

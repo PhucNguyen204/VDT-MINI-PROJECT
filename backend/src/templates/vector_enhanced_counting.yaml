@@ -1,0 +1,81 @@
+# Enhanced Vector Configuration Template with Real-time Counting
+# Includes optimized metrics collection for real-time log counting
+
+data_dir: /var/lib/vector
+
+# API configuration for metrics collection
+api:
+  enabled: true
+  address: 0.0.0.0:8686
+  playground: true
+
+# Enhanced telemetry for better metrics granularity
+telemetry:
+  metrics:
+    enabled: true
+    # Export metrics in Prometheus format
+    prometheus:
+      enabled: true
+      address: 0.0.0.0:8686
+
+# Example sources with enhanced metrics
+sources:
+  # HTTP Source with detailed metrics
+  http_logs:
+    type: http_server
+    address: 0.0.0.0:8080
+    # Add component_id for easier metrics identification
+    component_id: "http_source"
+    
+  # File Source with detailed metrics  
+  file_logs:
+    type: file
+    include: ["/var/log/**/*.log"]
+    component_id: "file_source"
+    # Enhanced file reading settings
+    read_from: beginning
+    fingerprint:
+      strategy: checksum
+      
+# Example transforms with counting capabilities
+transforms:
+  # Parse and enrich logs
+  parse_logs:
+    type: remap
+    inputs: ["http_logs", "file_logs"]
+    source: |
+      # Add source tracking
+      .source_type = get_metadata_field!("source_type")
+      .pipeline_id = "${PIPELINE_ID}"
+      
+      # Add timestamp if missing
+      if !exists(.timestamp) {
+        .timestamp = now()
+      }
+      
+      # Try to parse JSON logs
+      parsed, err = parse_json(.message)
+      if err == null {
+        . = merge!(., parsed)
+      }
+      
+      # Add log counter metadata
+      .log_sequence = uuid_v4()
+      .processed_at = now()
+
+# Example sinks with metrics
+sinks:
+  # Console output for debugging
+  console_output:
+    type: console
+    inputs: ["parse_logs"]
+    encoding:
+      codec: json
+      
+  # File output with detailed metrics
+  file_output:
+    type: file
+    inputs: ["parse_logs"]
+    path: "/tmp/processed_logs_%Y%m%d.log"
+    encoding:
+      codec: json

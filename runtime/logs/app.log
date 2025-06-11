@@ -1,2 +1,0 @@
-{"timestamp":"2025-06-08T12:15:00Z","level":"INFO","message":"Application started","source":"file_test","user_id":123}
-{"timestamp":"2025-06-08T12:15:30Z","level":"ERROR","message":"Database connection failed","source":"file_test","error_code":500}

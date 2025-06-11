@@ -3,10 +3,12 @@
   "version": "1.0.0",
   "description": "",
   "main": "src/server.js",
-  "type": "module",
-  "scripts": {
+  "type": "module",  "scripts": {
     "start": "node src/server.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "test:realtime-counter": "node tests/test-realtime-counter.js",
+    "test:db": "node tests/test-db.js",
+    "test:logger": "node tests/test-logger.js"
   },
   "keywords": [],
   "author": "",

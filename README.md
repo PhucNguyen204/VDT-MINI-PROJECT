@@ -175,3 +175,4 @@ docker exec vdt_pg psql -U vector -d pipelines -c "SELECT * FROM pipelines WHERE
 docker exec vdt_pg psql -U vector -d pipelines -c "TRUNCATE TABLE pipelines RESTART IDENTITY CASCADE; TRUNCATE TABLE pipeline_metrics RESTART IDENTITY CASCADE; TRUNCATE TABLE pipeline_alerts RESTART IDENTITY CASCADE; TRUNCATE TABLE monitoring_config RESTART IDENTITY CASCADE; TRUNCATE TABLE custom_pipelines RESTART IDENTITY CASCADE"
 
 
+docker exec vdt_pg psql -U vector -d pipelines -c "TRUNCATE TABLE custom_pipelines RESTART IDENTITY CASCADE; TRUNCATE TABLE custom_pipeline_logs RESTART IDENTITY CASCADE; TRUNCATE TABLE pipeline_metrics RESTART IDENTITY CASCADE"
