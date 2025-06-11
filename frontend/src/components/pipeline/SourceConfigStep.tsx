@@ -182,7 +182,21 @@ export const SourceConfigStep: React.FC = () => {
             options={sourceTypes}
             required
           />          {currentSource.source.type === 'file' && (
-            <div className="space-y-4">              <Input
+            <div className="space-y-4">
+              {/* File Path Suggestion */}
+              <div className="mb-3">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => handleConfigUpdate({ 
+                    patterns: ['/runtime/logs/*.log']
+                  })}
+                >
+                  💡 Dùng đường dẫn mặc định: /runtime/logs/*.log
+                </Button>
+              </div>
+              
+              <Input
                 label="File Patterns (comma-separated)"
                 type="text"
                 value={currentSource.source.patterns?.join(', ') || ''}
@@ -338,9 +352,42 @@ export const SourceConfigStep: React.FC = () => {
                     </Button>
                   )}
                 </div>
-                
-                {sink.type === 's3' && (
+                  {sink.type === 's3' && (
                   <div className="space-y-4">
+                    {/* S3 Configuration Suggestions */}
+                    <div className="mb-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => updateSink(index, { 
+                            config: { 
+                              ...sink.config, 
+                              bucket: 'phucnguyen204',
+                              region: 'ap-southeast-2',
+                              access_key_id: 'AKIA5YG3CCI7MXG5KIE7',
+                              secret_access_key: 'your-secret-key-here',
+                              key_prefix: 'custom-logs/%Y/%m/%d/'
+                            } 
+                          })}
+                        >
+                          💡 Dùng thông tin S3 của tôi
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => updateSink(index, { 
+                            config: { 
+                              ...sink.config, 
+                              key_prefix: `logs/${selectedSourceKey}/%Y/%m/%d/`
+                            } 
+                          })}
+                        >
+                          📁 Key prefix mặc định
+                        </Button>
+                      </div>
+                    </div>
+                    
                     <div className="grid grid-cols-2 gap-3">
                       <Input
                         label="Bucket *"

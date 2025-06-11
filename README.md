@@ -176,3 +176,57 @@ docker exec vdt_pg psql -U vector -d pipelines -c "TRUNCATE TABLE pipelines REST
 
 
 docker exec vdt_pg psql -U vector -d pipelines -c "TRUNCATE TABLE custom_pipelines RESTART IDENTITY CASCADE; TRUNCATE TABLE custom_pipeline_logs RESTART IDENTITY CASCADE; TRUNCATE TABLE pipeline_metrics RESTART IDENTITY CASCADE"
+
+
+
+
+
+gửi log vào http 
+for ($i = 1; $i -le 5; $i++) {
+    $body = @{
+        timestamp = (Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ")
+        level = "INFO"
+        message = "Test log HTTP số $i"
+        index = $i
+        source_type = "http_server"
+    } | ConvertTo-Json
+    Invoke-RestMethod -Uri "http://localhost:8080" -Method Post -Body $body -ContentType "application/json"
+    Start-Sleep -Milliseconds 300
+}
+
+
+$logPath = "runtime/logs/app.log"
+for ($i = 1; $i -le 5; $i++) {
+    $log = @{
+        timestamp = (Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ")
+        level = "INFO"
+        message = "Test log file số $i"
+        index = $i
+        source_type = "file"
+    } | ConvertTo-Json -Compress
+    try {
+        Add-Content -Path $logPath -Value $log
+        Write-Host "✅ Đã ghi log số $i vào $logPath"
+    } catch {
+        Write-Host "⚠️ Không thể ghi log số $i vào $logPath. Thử ghi với quyền admin..."
+        $cmd = "Add-Content -Path `"$logPath`" -Value '$log'"
+        Start-Process powershell -Verb RunAs -ArgumentList "-NoProfile -Command $cmd"
+        Start-Sleep -Milliseconds 800
+    }
+    Start-Sleep -Milliseconds 300
+}
+
+
+
+for ($i = 1; $i -le 5; $i++) {
+    $log = @{
+        timestamp = (Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ")
+        level = "INFO"
+        message = "Test log file số $i"
+        index = $i
+        source_type = "file"
+    } | ConvertTo-Json -Compress
+    $log | Out-File -FilePath "D:\demo_VDT\runtime\logs\app.log" -Append -Encoding UTF8
+    Write-Host "✅ Đã ghi log số $i"
+    Start-Sleep -Milliseconds 300
+}
