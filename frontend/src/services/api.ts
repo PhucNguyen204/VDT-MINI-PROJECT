@@ -509,8 +509,7 @@ export const validationApi = {
     }
   },
 
-  // Test S3 bucket access
-  testS3Bucket: async (bucket: string, region: string, accessKey: string, secretKey: string): Promise<boolean> => {
+  // Test S3 bucket access  testS3Bucket: async (bucket: string, region: string, accessKey: string, secretKey: string): Promise<boolean> => {
     try {
       // This would require a backend endpoint to test S3 access
       // For now, we'll just do basic validation
@@ -519,6 +518,51 @@ export const validationApi = {
       console.error('Error testing S3 bucket:', error);
       return false;
     }
+  }
+};
+
+// Real-time Log Counter API
+export const realTimeCounterApi = {
+  // Start monitoring
+  start: async (pipelineId: string): Promise<any> => {
+    const response = await api.post('/realtime-counter/start', { pipelineId });
+    return response.data;
+  },
+
+  // Stop monitoring
+  stop: async (): Promise<any> => {
+    const response = await api.post('/realtime-counter/stop');
+    return response.data;
+  },
+
+  // Get counter status
+  getStatus: async (): Promise<any> => {
+    const response = await api.get('/realtime-counter/status');
+    return response.data;
+  },
+
+  // Get log counts for specific pipeline
+  getPipelineCounts: async (pipelineId: string): Promise<any> => {
+    const response = await api.get(`/realtime-counter/counts/${pipelineId}`);
+    return response.data;
+  },
+
+  // Get readable summary for specific pipeline
+  getPipelineSummary: async (pipelineId: string): Promise<any> => {
+    const response = await api.get(`/realtime-counter/summary/${pipelineId}`);
+    return response.data;
+  },
+
+  // Force update counters for specific pipeline
+  forceUpdate: async (pipelineId: string): Promise<any> => {
+    const response = await api.post(`/realtime-counter/update/${pipelineId}`);
+    return response.data;
+  },
+
+  // Reset counters for specific pipeline
+  reset: async (pipelineId: string): Promise<any> => {
+    const response = await api.post(`/realtime-counter/reset/${pipelineId}`);
+    return response.data;
   }
 };
 
