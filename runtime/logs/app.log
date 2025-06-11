@@ -1,1 +1,4 @@
 {"message": "Test file log 1", "timestamp": "2025-06-11T09:44:10Z", "level": "info"}
+{"timestamp":"2025-06-11T10:40:00Z","level":"INFO","message":"Test log from file","source_type":"file"}
+{"timestamp":"2025-06-11T10:40:00Z","level":"INFO","message":"Test log from file","source_type":"file"}
+{"timestamp":"2025-06-11T10:40:00Z","level":"INFO","message":"Test log from file","source_type":"file"}

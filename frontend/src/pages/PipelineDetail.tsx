@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { PipelineFlowVisualization } from '../components/pipeline/PipelineFlowVisualization';
 import { PipelineMetrics } from '../components/pipeline/PipelineMetrics';
+import { LogCounterWidget } from '../components/pipeline/LogCounterWidget';
 import { usePipelineStore } from '../store';
 import { Card, Badge, Tabs, TabsContent, TabsList, TabsTrigger, Modal } from '../components/ui/UIElements';
 import { Button } from '../components/ui/FormElements';
@@ -430,10 +431,14 @@ export const PipelineDetail: React.FC = () => {
                   </span>
                 </div>
               </div>
-            </Card>          </div>
-
-          {/* Pipeline Flow Visualization */}
+            </Card>          </div>          {/* Pipeline Flow Visualization */}
           <PipelineFlowVisualization pipeline={pipeline} />
+
+          {/* Real-time Log Counter */}
+          <LogCounterWidget 
+            pipelineId={pipeline.id} 
+            pipelineName={pipeline.name} 
+          />
 
           {/* Detailed Configuration */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

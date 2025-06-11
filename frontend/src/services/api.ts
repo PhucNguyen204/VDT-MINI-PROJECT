@@ -509,7 +509,8 @@ export const validationApi = {
     }
   },
 
-  // Test S3 bucket access  testS3Bucket: async (bucket: string, region: string, accessKey: string, secretKey: string): Promise<boolean> => {
+  // Test S3 bucket access
+  testS3Bucket: async (bucket: string, region: string, accessKey: string, secretKey: string): Promise<boolean> => {
     try {
       // This would require a backend endpoint to test S3 access
       // For now, we'll just do basic validation
@@ -517,8 +518,7 @@ export const validationApi = {
     } catch (error) {
       console.error('Error testing S3 bucket:', error);
       return false;
-    }
-  }
+    }  }
 };
 
 // Real-time Log Counter API
