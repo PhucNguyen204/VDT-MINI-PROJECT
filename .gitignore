@@ -1,2 +1,44 @@
+# Environment variables
 .env
-docker-compose.yml
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# AWS credentials
+*.pem
+*.key
+
+# Logs
+runtime/logs/*.log
+runtime/logs/*.txt
+
+# Generated Vector configs
+runtime/configs/vector_*.yaml
+
+# Node modules
+node_modules/
+*/node_modules/
+
+# Build outputs
+build/
+dist/
+*/build/
+*/dist/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Docker
+.dockerignore
+
+# Temporary files
+*.tmp
+*.temp

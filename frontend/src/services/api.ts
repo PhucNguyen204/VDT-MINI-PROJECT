@@ -43,101 +43,134 @@ api.interceptors.response.use(
   }
 );
 
+// Helper function to get AWS credentials from environment
+const getAwsCredentials = () => {
+  return {
+    access_key_id: process.env.REACT_APP_AWS_ACCESS_KEY_ID || '',
+    secret_access_key: process.env.REACT_APP_AWS_SECRET_ACCESS_KEY || '',
+    region: process.env.REACT_APP_AWS_DEFAULT_REGION || 'ap-southeast-2'
+  };
+};
+
+// Helper function to create S3 sink config
+const createS3SinkConfig = (bucket: string, keyPrefix?: string) => {
+  const credentials = getAwsCredentials();
+  return {
+    type: 's3' as const,
+    config: {
+      bucket,
+      region: credentials.region,
+      access_key_id: credentials.access_key_id,
+      secret_access_key: credentials.secret_access_key,
+      key_prefix: keyPrefix || 'custom-logs/',
+      compression: 'gzip',
+      encoding: {
+        codec: 'json'
+      },
+      batch: {
+        max_events: 1,
+        timeout_secs: 10
+      }
+    }
+  };
+};
+
 // Pipeline Management API
 export const pipelineApi = {  // Create pipeline
-  create: async (data: CreatePipelineForm): Promise<Pipeline> => {
-    // Transform data to match Custom Pipeline API format
-    const sources: Record<string, any> = {};
-    const transforms: Record<string, string[]> = {};
-    const sinks: Record<string, any[]> = {};
-    
-    // Transform sources
-    for (const [sourceId, sourceConfigData] of Object.entries(data.sources)) {
-      const sourceConfig = sourceConfigData.source;
-      
-      switch (sourceConfig.type) {
-        case 'file':
+  create: async (formData: CreatePipelineForm): Promise<Pipeline> => {
+    try {
+      // Transform frontend form data to backend format
+      const sources: Record<string, any> = {};
+      const transforms: Record<string, string[]> = {};
+      const sinks: Record<string, any[]> = {};
+
+      // Process sources
+      formData.sources.forEach((source, index) => {
+        const sourceId = `source_${index + 1}`;
+        
+        if (source.type === 'file') {
           sources[sourceId] = {
             type: 'file',
-            include: sourceConfig.patterns || [], // Map patterns to include
+            include: source.config.include || ['/runtime/logs/*.log'],
+            exclude: source.config.exclude || [],
+            ignore_older_secs: 86400,
+            max_read_bytes: 2048,
+            start_at_beginning: true,
+            fingerprint: {
+              strategy: 'checksum',
+              ignored_header_bytes: 0
+            }
           };
-          break;
-        case 'http':
+        } else if (source.type === 'http') {
           sources[sourceId] = {
-            type: 'http',
-            listen_port: sourceConfig.listen_port || 8088,
+            type: 'http_server',
+            address: `0.0.0.0:${source.config.listen_port || 8080}`
           };
-          break;
-        case 'prometheus_scrape':
-          sources[sourceId] = {
-            type: 'prometheus_scrape',
-            endpoints: sourceConfig.endpoints || [],
-            scrape_interval_secs: sourceConfig.scrape_interval || 15,
-          };
-          break;
-        case 'docker_logs':
+        } else if (source.type === 'docker_logs') {
           sources[sourceId] = {
             type: 'docker_logs',
-            include_containers: sourceConfig.include_containers || [],
-            exclude_containers: sourceConfig.exclude_containers || [],
+            include_containers: source.config.include_containers || [],
+            exclude_containers: source.config.exclude_containers || []
           };
-          break;
-        case 'syslog':
+        } else if (source.type === 'syslog') {
           sources[sourceId] = {
             type: 'syslog',
-            mode: sourceConfig.mode || 'tcp',
-            address: sourceConfig.address || '0.0.0.0:5514',
+            mode: source.config.mode || 'tcp',
+            address: source.config.address || '0.0.0.0:5514'
           };
-          break;
-        default:
-          throw new Error(`Unsupported source type: ${sourceConfig.type}`);
-      }
-      
-      // Set transforms and sinks for this source
-      transforms[sourceId] = sourceConfigData.transforms || [];
-      sinks[sourceId] = sourceConfigData.sinks || []; // Keep full sink objects with config
-    }
-    
-    const transformedData = {
-      name: data.name,
-      description: data.description,
-      sources,
-      transforms,
-      sinks
-    };
-    
-    console.log('Sending transformed data to custom-pipelines:', transformedData);
-    
-    try {      const response = await api.post<any>('/custom-pipelines', transformedData);      console.log('API Create Response:', response.data);
-      
-      // Handle Custom Pipeline API response structure  
-      let pipeline;
-      if (response.data.pipeline) {
-        pipeline = response.data.pipeline;
-      } else if (response.data.data) {
-        pipeline = response.data.data;
-      } else {
-        throw new Error('No pipeline data in response');
-      }
-      
-      // Custom pipeline API returns standard format, convert to expected format
-      const formattedPipeline = {
-        id: pipeline.id,
-        name: pipeline.name || transformedData.name,
-        status: pipeline.status || 'created',
-        container_id: pipeline.container_id,
-        created_at: pipeline.created_at || new Date().toISOString(),
-        sources_config: pipeline.sources_config,
-        transforms_config: pipeline.transforms_config,
-        sinks_config: pipeline.sinks_config,
-        exposed_ports: pipeline.exposed_ports || [],
-        ...pipeline
+        }
+
+        // Add transforms for this source
+        transforms[sourceId] = source.transforms || ['parse', 'enrich'];
+
+        // Add sinks for this source
+        const sourceSinks: any[] = [];
+        source.sinks.forEach(sink => {
+          if (sink.type === 's3') {
+            sourceSinks.push(createS3SinkConfig(
+              sink.config.bucket || 'default-bucket',
+              sink.config.key_prefix
+            ));
+          } else if (sink.type === 'console') {
+            sourceSinks.push({
+              type: 'console',
+              inputs: [`${sourceId}_enrich_1`],
+              encoding: {
+                codec: 'json'
+              }
+            });
+          } else if (sink.type === 'elasticsearch') {
+            sourceSinks.push({
+              type: 'elasticsearch',
+              inputs: [`${sourceId}_enrich_1`],
+              endpoints: sink.config.endpoints || ['http://localhost:9200'],
+              auth: {
+                username: sink.config.username || '',
+                password: sink.config.password || ''
+              },
+              doc_type: sink.config.doc_type || '_doc',
+              encoding: {
+                codec: 'json'
+              }
+            });
+          }
+        });
+        sinks[sourceId] = sourceSinks;
+      });
+
+      const requestBody = {
+        name: formData.name,
+        description: formData.description,
+        sources,
+        transforms,
+        sinks
       };
-      
-      return formattedPipeline;
-    } catch (error: any) {
-      console.error('Pipeline creation failed:', error.response?.data || error.message);
-      throw new Error(error.response?.data?.message || error.message || 'Failed to create pipeline');
+
+      const response = await api.post('/custom-pipelines', requestBody);
+      return response.data.pipeline;
+    } catch (error) {
+      console.error('Error creating pipeline:', error);
+      throw error;
     }
   },  // List all pipelines
   list: async (): Promise<Pipeline[]> => {

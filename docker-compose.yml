@@ -1,0 +1,33 @@
+services:
+  api:
+    build: ./backend
+    container_name: demo_vdt_api
+    env_file: ./backend/.env       
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./runtime:/runtime
+      - ./GeoLite2-City.mmdb:/etc/vector/GeoLite2-City.mmdb:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    restart: unless-stopped
+    networks:
+      - vector-network
+
+  postgres:
+    image: postgres:15
+    container_name: vdt_pg
+    env_file: ./backend/.env        
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - vector-network
+
+networks:
+  vector-network:
+    driver: bridge
+
+volumes:
+  pgdata:

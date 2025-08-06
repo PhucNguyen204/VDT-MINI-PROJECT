@@ -366,8 +366,8 @@ export const SourceConfigStep: React.FC = () => {
                               bucket: 'phucnguyen204',
                               region: 'ap-southeast-2',
                               access_key_id: 'AKIA5YG3CCI7MXG5KIE7',
-                              secret_access_key: 'your-secret-key-here',
-                              key_prefix: 'custom-logs/%Y/%m/%d/'
+                              secret_access_key: 'VH9ygZIMtfhzU9osXKmPYagmlTqaDeHm+t0J8a9m',
+                              key_prefix: 'demo/%Y/%m/%d/'
                             } 
                           })}
                         >

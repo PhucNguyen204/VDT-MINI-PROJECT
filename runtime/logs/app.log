@@ -1,44 +1,5 @@
-{"message": "Test file log 1", "timestamp": "2025-06-11T09:44:10Z", "level": "info"}
-{"timestamp":"2025-06-11T10:40:00Z","level":"INFO","message":"Test log from file","source_type":"file"}
-{"timestamp":"2025-06-11T10:40:00Z","level":"INFO","message":"Test log from file","source_type":"file"}
-{"timestamp":"2025-06-11T10:40:00Z","level":"INFO","message":"Test log from file","source_type":"file"}
-{
-    "message":  "Test log file s? 1",
-    "timestamp":  "2025-06-11T17:35:41Z",
-    "level":  "INFO",
-    "source_type":  "file",
-    "index":  1
-}
-{
-    "message":  "Test log file s? 2",
-    "timestamp":  "2025-06-11T17:35:41Z",
-    "level":  "INFO",
-    "source_type":  "file",
-    "index":  2
-}
-{
-    "message":  "Test log file s? 3",
-    "timestamp":  "2025-06-11T17:35:41Z",
-    "level":  "INFO",
-    "source_type":  "file",
-    "index":  3
-}
-{
-    "message":  "Test log file s? 4",
-    "timestamp":  "2025-06-11T17:35:42Z",
-    "level":  "INFO",
-    "source_type":  "file",
-    "index":  4
-}
-{
-    "message":  "Test log file s? 5",
-    "timestamp":  "2025-06-11T17:35:42Z",
-    "level":  "INFO",
-    "source_type":  "file",
-    "index":  5
-}
-{"message":"Test log file số 1","timestamp":"2025-06-11T17:47:34Z","level":"INFO","source_type":"file","index":1}
-{"message":"Test log file số 2","timestamp":"2025-06-11T17:47:34Z","level":"INFO","source_type":"file","index":2}
-{"message":"Test log file số 3","timestamp":"2025-06-11T17:47:34Z","level":"INFO","source_type":"file","index":3}
-{"message":"Test log file số 4","timestamp":"2025-06-11T17:47:35Z","level":"INFO","source_type":"file","index":4}
-{"message":"Test log file số 5","timestamp":"2025-06-11T17:47:35Z","level":"INFO","source_type":"file","index":5}
+﻿{"message":"Test log file số 1","timestamp":"2025-06-13T10:39:51Z","level":"INFO","source_type":"file","index":1}
+{"message":"Test log file số 2","timestamp":"2025-06-13T10:39:51Z","level":"INFO","source_type":"file","index":2}
+{"message":"Test log file số 3","timestamp":"2025-06-13T10:39:52Z","level":"INFO","source_type":"file","index":3}
+{"message":"Test log file số 4","timestamp":"2025-06-13T10:39:52Z","level":"INFO","source_type":"file","index":4}
+{"message":"Test log file số 5","timestamp":"2025-06-13T10:39:52Z","level":"INFO","source_type":"file","index":5}
